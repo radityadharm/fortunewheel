@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fortune Wheel — Undian Nama</title>
+<meta name="description" content="Roda undian nama dengan efek confetti, roda tersimpan, dan mode dua roda." />
+<meta name="theme-color" content="#0a0c14" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Fortune Wheel — Undian Nama" />
+<meta property="og:description" content="Masukkan nama, putar rodanya, rayakan pemenangnya dengan confetti." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎡</text></svg>" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">🎡</span>
+      <div>
+        <h1>Fortune Wheel</h1>
+        <p>Masukkan nama, putar rodanya, rayakan pemenangnya.</p>
+      </div>
+    </div>
+
+    <div class="topbar__actions">
+      <div class="segmented" role="group" aria-label="Jumlah roda">
+        <button type="button" class="segmented__btn is-active" data-mode="1">1 Roda</button>
+        <button type="button" class="segmented__btn" data-mode="2">2 Roda</button>
+      </div>
+      <button type="button" class="btn" id="spin-all" hidden>Putar semua</button>
+      <button type="button" class="btn btn--ghost" id="sound-toggle" aria-pressed="true" title="Suara">
+        <span data-role="icon">🔊</span><span class="btn__text">Suara</span>
+      </button>
+      <button type="button" class="btn btn--primary" id="open-drawer">Roda tersimpan</button>
+    </div>
+  </header>
+
+  <main class="wheels" id="wheels" data-mode="1"></main>
+
+  <footer class="foot">
+    <span id="storage-note"></span>
+    <span>Tekan <kbd>Spasi</kbd> untuk memutar roda aktif.</span>
+  </footer>
+
+  <!-- ====== Template panel roda ====== -->
+  <template id="panel-tpl">
+    <section class="panel">
+      <header class="panel__head">
+        <input class="panel__title" data-role="title" maxlength="40" aria-label="Nama roda" />
+        <span class="pill" data-role="count">0 nama</span>
+      </header>
+
+      <div class="stage" data-role="stage">
+        <div class="stage__pointer" aria-hidden="true"></div>
+        <canvas data-role="canvas" aria-label="Roda undian"></canvas>
+        <button type="button" class="spin" data-role="spin">
+          <span data-role="spin-text">PUTAR</span>
+        </button>
+      </div>
+
+      <form class="add" data-role="add-form" autocomplete="off">
+        <input type="text" data-role="name-input" placeholder="Tulis nama, tekan Enter" aria-label="Tambah nama" />
+        <button type="submit" class="btn btn--primary">Tambah</button>
+      </form>
+
+      <details class="bulk">
+        <summary>Tambah banyak nama sekaligus</summary>
+        <textarea data-role="bulk-input" rows="4" placeholder="Satu nama per baris, atau pisahkan dengan koma"></textarea>
+        <div class="bulk__actions">
+          <button type="button" class="btn btn--small" data-role="bulk-add">Tambahkan</button>
+          <button type="button" class="btn btn--small btn--ghost" data-role="bulk-replace">Ganti semua</button>
+        </div>
+      </details>
+
+      <div class="toolbar">
+        <label class="check"><input type="checkbox" data-role="auto-remove" /> <span>Hapus pemenang otomatis</span></label>
+        <div class="toolbar__spacer"></div>
+        <button type="button" class="btn btn--small btn--ghost" data-role="shuffle">Acak</button>
+        <button type="button" class="btn btn--small btn--ghost" data-role="clear">Kosongkan</button>
+        <button type="button" class="btn btn--small" data-role="save">Simpan roda</button>
+      </div>
+
+      <ul class="names" data-role="list"></ul>
+
+      <section class="history" data-role="history-box" hidden>
+        <div class="history__head">
+          <h3>Riwayat pemenang</h3>
+          <button type="button" class="linkbtn" data-role="clear-history">bersihkan</button>
+        </div>
+        <ol data-role="history"></ol>
+      </section>
+    </section>
+  </template>
+
+  <!-- ====== Modal pemenang ====== -->
+  <div class="modal" id="winner-modal" hidden>
+    <div class="modal__backdrop" data-role="dismiss"></div>
+    <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="winner-name">
+      <p class="modal__eyebrow" id="winner-source"></p>
+      <div id="winner-single">
+        <p class="modal__label">Pemenangnya adalah</p>
+        <h2 class="modal__name" id="winner-name"></h2>
+        <p class="modal__note" id="winner-note"></p>
+      </div>
+      <ul class="winners" id="winner-multi" hidden></ul>
+      <div class="modal__actions">
+        <button type="button" class="btn btn--danger" id="winner-remove"></button>
+        <button type="button" class="btn btn--ghost" id="winner-keep">Tutup</button>
+        <button type="button" class="btn btn--primary" id="winner-again">Putar lagi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Drawer roda tersimpan ====== -->
+  <div class="drawer" id="drawer" hidden>
+    <div class="drawer__backdrop" data-role="dismiss"></div>
+    <aside class="drawer__panel" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <header class="drawer__head">
+        <h2 id="drawer-title">Roda tersimpan</h2>
+        <button type="button" class="iconbtn" id="close-drawer" aria-label="Tutup">×</button>
+      </header>
+
+      <form class="saveform" id="save-form" autocomplete="off">
+        <div class="saveform__row">
+          <label class="field">
+            <span>Ambil nama dari</span>
+            <select id="save-source"></select>
+          </label>
+          <label class="field">
+            <span>Simpan sebagai</span>
+            <input type="text" id="save-name" placeholder="mis. Doorprize Agustus" />
+          </label>
+        </div>
+        <button type="submit" class="btn btn--primary">Simpan roda</button>
+      </form>
+
+      <ul class="saved" id="saved-list"></ul>
+      <p class="saved__empty" id="saved-empty">Belum ada roda tersimpan. Simpan daftar nama agar bisa dipakai lagi kapan saja.</p>
+
+      <footer class="drawer__foot">
+        <button type="button" class="btn btn--small btn--ghost" id="export-json">Ekspor JSON</button>
+        <label class="btn btn--small btn--ghost">Impor JSON<input type="file" id="import-json" accept="application/json,.json" hidden /></label>
+      </footer>
+    </aside>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/confetti.js"></script>
+  <script src="js/wheel.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

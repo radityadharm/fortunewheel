@@ -1,0 +1,12 @@
+{
+  "name": "fortunewheel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Roda undian nama dengan confetti, roda tersimpan, dan mode dua roda. Situs statis tanpa dependency.",
+  "scripts": {
+    "dev": "npx --yes serve .",
+    "start": "npx --yes serve ."
+  },
+  "keywords": ["fortune-wheel", "spinner", "undian", "doorprize", "confetti"],
+  "license": "MIT"
+}

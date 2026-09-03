@@ -1,0 +1,85 @@
+# 🎡 Fortune Wheel — Undian Nama
+
+Aplikasi roda undian: masukkan nama, putar rodanya, dan pemenangnya dirayakan
+dengan confetti. Bisa menyimpan beberapa roda untuk dipakai lagi, dan bisa
+menjalankan **dua roda sekaligus** dengan isi yang berbeda.
+
+Situs statis murni — tanpa framework, tanpa dependency, tanpa proses build.
+
+## Fitur
+
+| Fitur | Keterangan |
+| --- | --- |
+| **Input nama** | Satu per satu (Enter) atau sekaligus lewat tempel banyak baris/koma. Nama kembar otomatis ditolak. |
+| **Confetti** | Ledakan confetti + suara singkat tiap kali pemenang keluar. |
+| **Hapus pemenang** | Tombol *Hapus dari roda* di kartu pemenang agar tidak menang dua kali — lengkap dengan tombol *Kembalikan* kalau salah pencet. Ada juga opsi **hapus pemenang otomatis**. |
+| **Roda tersimpan** | Simpan daftar nama dengan sebuah nama roda, lalu muat lagi kapan saja. Bisa ditimpa, diduplikat, dihapus, diekspor/impor JSON. |
+| **Dua roda** | Ganti ke mode *2 Roda* untuk menjalankan roda kedua dengan isi berbeda (mis. peserta × hadiah). Bisa diputar sendiri-sendiri atau bareng lewat **Putar semua** — hasilnya tampil bersamaan dalam satu kartu. |
+| **Riwayat** | Daftar pemenang per roda beserta jamnya. |
+| **Tersimpan otomatis** | Semua isi roda, mode, dan pengaturan disimpan di `localStorage` browser. |
+
+Pelengkap: acak urutan, ganti nama roda, matikan suara, tekan <kbd>Spasi</kbd>
+untuk memutar roda aktif, <kbd>Esc</kbd> untuk menutup dialog, dan tampilan
+menyesuaikan layar ponsel.
+
+## Menjalankan di komputer sendiri
+
+Cara tercepat — buka langsung berkasnya:
+
+```
+buka index.html di browser
+```
+
+Atau lewat server lokal (disarankan, supaya perilakunya sama persis dengan versi online):
+
+```bash
+npm run dev          # butuh Node.js
+# atau
+python3 -m http.server 8000
+```
+
+Lalu buka `http://localhost:8000`.
+
+## Deploy ke Vercel
+
+Repo ini sudah siap deploy — `vercel.json` mengatur agar Vercel menyajikan
+berkas apa adanya tanpa proses build.
+
+**Lewat dashboard (paling gampang)**
+
+1. Buka [vercel.com/new](https://vercel.com/new), lalu impor repositori ini.
+2. Framework Preset: **Other**. Build Command dan Install Command dibiarkan
+   kosong, Output Directory `.` — semuanya sudah diisi otomatis dari `vercel.json`.
+3. Klik **Deploy**. Setiap push ke branch utama akan otomatis dideploy ulang.
+
+**Lewat CLI**
+
+```bash
+npx vercel          # deploy pratinjau
+npx vercel --prod   # deploy ke domain produksi
+```
+
+Karena semua data disimpan di `localStorage` masing-masing pengunjung, tidak ada
+database atau environment variable yang perlu disiapkan.
+
+## Struktur berkas
+
+```
+index.html        kerangka halaman + template panel roda
+css/styles.css    seluruh tampilan
+js/storage.js     baca/tulis localStorage (dengan cadangan di memori)
+js/sound.js       bunyi "tek" dan fanfare via Web Audio API
+js/confetti.js    animasi confetti di canvas layar penuh
+js/wheel.js       gambar roda + animasi putaran
+js/app.js         state aplikasi, dua panel roda, modal pemenang, roda tersimpan
+vercel.json       konfigurasi deploy statis
+```
+
+## Catatan teknis
+
+Pemenang ditentukan lebih dulu memakai `crypto.getRandomValues`, baru rotasi
+akhir roda dihitung agar segmen itu benar-benar berhenti tepat di bawah jarum.
+Jadi yang terlihat di layar selalu sama dengan yang diumumkan — bukan ditebak
+dari sudut berhenti.
+
+Batas praktis: 300 nama per roda.
