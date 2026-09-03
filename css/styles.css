@@ -306,9 +306,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .toolbar__spacer { flex: 1 1 auto; }
 
-.check { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
-.check input { accent-color: var(--accent); width: 15px; height: 15px; }
-.check:hover { color: var(--text); }
+.inline-field { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+
+.inline-field select {
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.inline-field select:hover { border-color: var(--line-strong); }
+.inline-field select:focus { outline: none; border-color: rgba(255, 204, 77, 0.5); }
 
 /* ============ Daftar nama ============ */
 .names {
@@ -339,26 +349,48 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-radius: 999px;
   font-size: 13px;
   max-width: 100%;
-  animation: pop 0.18s ease-out;
 }
+
+/* Hanya nama yang baru masuk yang beranimasi — kalau semua chip ikut
+   beranimasi tiap render, seluruh daftar berkedip saat ada perubahan kecil. */
+.names li.is-new { animation: pop 0.18s ease-out; }
 
 .names li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .names li .swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 
-.names li button {
+.names li .chipbtn {
   border: 0;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  width: 20px;
-  height: 20px;
+  width: 21px;
+  height: 21px;
   border-radius: 50%;
   line-height: 1;
-  font-size: 15px;
+  font-size: 14px;
   flex: none;
+  transition: background 0.15s, color 0.15s;
 }
 
-.names li button:hover { background: rgba(255, 107, 107, 0.2); color: #ffb3b3; }
+.names li .chipbtn[data-action="block"]:hover,
+.names li .chipbtn.is-on { background: rgba(255, 204, 77, 0.2); color: var(--accent); }
+.names li .chipbtn[data-action="remove"]:hover { background: rgba(255, 107, 107, 0.2); color: #ffb3b3; }
+
+/* Nama yang tetap tampil di roda tapi tidak ikut diundi. */
+.names li.is-blocked { border-style: dashed; background: rgba(0, 0, 0, 0.16); }
+.names li.is-blocked span { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.3); }
+
+.blocked-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -2px 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.blocked-note::before { content: "⊘"; color: var(--accent); font-size: 13px; }
 
 @keyframes pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
 
@@ -431,8 +463,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .winners li {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px 12px;
   text-align: left;
   padding: 12px 14px;
   border-radius: 15px;
@@ -443,6 +476,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .winners .who { flex: 1; min-width: 0; }
 .winners .who small { display: block; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 3px; }
 .winners .who b { font-size: 20px; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.winners .who em { display: block; margin-top: 3px; font-style: normal; font-size: 11.5px; color: var(--muted); }
+.winners__actions { display: flex; gap: 6px; flex: none; }
 
 .modal__actions { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; margin-top: 22px; }
 

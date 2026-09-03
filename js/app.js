@@ -17,8 +17,10 @@
 
   /* ---------- State ---------- */
 
+  var AFTER_WIN = ['keep', 'remove', 'block'];
+
   function emptyWheel(name) {
-    return { name: name, items: [], history: [], autoRemove: false };
+    return { name: name, items: [], history: [], afterWin: 'keep' };
   }
 
   function normalizeWheel(raw, fallbackName) {
@@ -26,13 +28,17 @@
     if (!raw || typeof raw !== 'object') return data;
 
     data.name = typeof raw.name === 'string' && raw.name.trim() ? raw.name : fallbackName;
-    data.autoRemove = !!raw.autoRemove;
+
+    if (AFTER_WIN.indexOf(raw.afterWin) >= 0) data.afterWin = raw.afterWin;
+    else if (raw.autoRemove) data.afterWin = 'remove'; // format lama
 
     if (Array.isArray(raw.items)) {
       data.items = raw.items
         .map(function (item) {
-          if (typeof item === 'string') return { id: uid(), label: item };
-          if (item && typeof item.label === 'string') return { id: item.id || uid(), label: item.label };
+          if (typeof item === 'string') return { id: uid(), label: item, blocked: false };
+          if (item && typeof item.label === 'string') {
+            return { id: item.id || uid(), label: item.label, blocked: !!item.blocked };
+          }
           return null;
         })
         .filter(Boolean)
@@ -58,9 +64,22 @@
     ]
   };
 
-  var saved = (FWStorage.read(SAVED_KEY, []) || []).filter(function (item) {
-    return item && typeof item.name === 'string' && Array.isArray(item.names);
-  });
+  var saved = (FWStorage.read(SAVED_KEY, []) || [])
+    .filter(function (item) { return item && typeof item.name === 'string' && Array.isArray(item.names); })
+    .map(function (item) {
+      item.blocked = Array.isArray(item.blocked) ? item.blocked.filter(function (n) { return typeof n === 'string'; }) : [];
+      return item;
+    });
+
+  /* Nama-nama yang tidak ikut diundi disimpan terpisah supaya daftar `names`
+     tetap terbaca apa adanya (juga oleh berkas ekspor versi lama). */
+  function blockedListOf(data) {
+    return data.items.filter(function (item) { return item.blocked; }).map(function (item) { return item.label; });
+  }
+
+  function eligibleCount(data) {
+    return data.items.filter(function (item) { return !item.blocked; }).length;
+  }
 
   var settings = FWStorage.read(SETTINGS_KEY, { sound: true }) || { sound: true };
 
@@ -91,7 +110,7 @@
       if (seen[key]) { skipped++; return; }
       if (data.items.length >= MAX_NAMES) { full = true; return; }
       seen[key] = true;
-      data.items.push({ id: uid(), label: name });
+      data.items.push({ id: uid(), label: name, blocked: false });
       added++;
     });
 
@@ -139,7 +158,8 @@
       bulkInput: pick('bulk-input'),
       bulkAdd: pick('bulk-add'),
       bulkReplace: pick('bulk-replace'),
-      autoRemove: pick('auto-remove'),
+      afterWin: pick('after-win'),
+      blockedNote: pick('blocked-note'),
       shuffle: pick('shuffle'),
       clear: pick('clear'),
       save: pick('save'),
@@ -210,9 +230,9 @@
     });
 
     /* -- opsi -- */
-    el.autoRemove.checked = data.autoRemove;
-    el.autoRemove.addEventListener('change', function () {
-      data.autoRemove = el.autoRemove.checked;
+    el.afterWin.value = data.afterWin;
+    el.afterWin.addEventListener('change', function () {
+      data.afterWin = AFTER_WIN.indexOf(el.afterWin.value) >= 0 ? el.afterWin.value : 'keep';
       persistState();
     });
 
@@ -254,8 +274,18 @@
     el.list.addEventListener('click', function (event) {
       var button = event.target.closest('button[data-id]');
       if (!button || wheel.spinning) return;
+
       var id = button.getAttribute('data-id');
-      data.items = data.items.filter(function (item) { return item.id !== id; });
+      var action = button.getAttribute('data-action');
+
+      if (action === 'block') {
+        data.items.forEach(function (item) {
+          if (item.id === id) item.blocked = !item.blocked;
+        });
+      } else {
+        data.items = data.items.filter(function (item) { return item.id !== id; });
+      }
+
       renderPanel(ctrl);
       persistState();
     });
@@ -291,16 +321,32 @@
     var data = ctrl.data;
     var el = ctrl.el;
     var total = data.items.length;
+    var blocked = total - eligibleCount(data);
 
-    el.count.textContent = total + ' nama';
-    ctrl.wheel.setLabels(data.items.map(function (item) { return item.label; }));
+    el.count.textContent = blocked ? total + ' nama · ' + blocked + ' tidak diundi' : total + ' nama';
+    ctrl.wheel.setSlices(data.items.map(function (item) {
+      return { label: item.label, blocked: item.blocked };
+    }));
 
-    el.spin.disabled = total === 0 || ctrl.wheel.spinning;
+    el.spin.disabled = eligibleCount(data) === 0 || ctrl.wheel.spinning;
+
+    el.blockedNote.hidden = blocked === 0;
+    if (blocked) {
+      el.blockedNote.textContent = blocked === total
+        ? 'Semua nama sedang tidak ikut diundi, jadi roda belum bisa diputar.'
+        : blocked + ' nama tetap tampil di roda tapi tidak akan menang.';
+    }
 
     /* daftar nama */
+    var shownBefore = ctrl.shownIds || {};
+    var shownNow = {};
+
     el.list.textContent = '';
     data.items.forEach(function (item, i) {
       var li = document.createElement('li');
+      var classes = [];
+      if (!shownBefore[item.id]) classes.push('is-new');
+      shownNow[item.id] = true;
 
       var dot = document.createElement('i');
       dot.className = 'swatch';
@@ -309,17 +355,40 @@
       var label = document.createElement('span');
       label.textContent = item.label;
 
+      var block = document.createElement('button');
+      block.type = 'button';
+      block.className = 'chipbtn' + (item.blocked ? ' is-on' : '');
+      block.setAttribute('data-id', item.id);
+      block.setAttribute('data-action', 'block');
+      block.title = item.blocked
+        ? 'Ikutkan lagi dalam undian'
+        : 'Tetap tampil di roda, tapi tidak bisa menang';
+      block.setAttribute('aria-label', block.title);
+      block.setAttribute('aria-pressed', String(!!item.blocked));
+      block.textContent = '⊘';
+
       var remove = document.createElement('button');
       remove.type = 'button';
+      remove.className = 'chipbtn';
       remove.setAttribute('data-id', item.id);
+      remove.setAttribute('data-action', 'remove');
       remove.setAttribute('aria-label', 'Hapus ' + item.label);
       remove.textContent = '×';
 
+      if (item.blocked) {
+        classes.push('is-blocked');
+        dot.style.background = '#39405e';
+      }
+      li.className = classes.join(' ');
+
       li.appendChild(dot);
       li.appendChild(label);
+      li.appendChild(block);
       li.appendChild(remove);
       el.list.appendChild(li);
     });
+
+    ctrl.shownIds = shownNow;
 
     /* riwayat */
     el.historyBox.hidden = data.history.length === 0;
@@ -351,7 +420,7 @@
   /* Memutar satu roda dan mencatat hasilnya. Modal & confetti diurus pemanggil,
      supaya "Putar semua" bisa menunggu kedua roda selesai dulu. */
   function runSpin(ctrl) {
-    if (ctrl.wheel.spinning || !ctrl.data.items.length) return Promise.resolve(null);
+    if (ctrl.wheel.spinning || eligibleCount(ctrl.data) === 0) return Promise.resolve(null);
 
     ctrl.el.spin.disabled = true;
     ctrl.el.spin.classList.add('is-spinning');
@@ -360,7 +429,7 @@
     return ctrl.wheel.spin().then(function (result) {
       ctrl.el.spin.classList.remove('is-spinning');
       ctrl.el.spinText.textContent = 'PUTAR';
-      ctrl.el.spin.disabled = ctrl.data.items.length === 0;
+      ctrl.el.spin.disabled = eligibleCount(ctrl.data) === 0;
       if (!result) return null;
 
       var item = ctrl.data.items[result.index];
@@ -369,20 +438,30 @@
       ctrl.data.history.unshift({ label: item.label, at: Date.now() });
       ctrl.data.history = ctrl.data.history.slice(0, 100);
 
-      var removed = false;
-      if (ctrl.data.autoRemove) {
-        ctrl.data.items = ctrl.data.items.filter(function (entry) { return entry.id !== item.id; });
-        removed = true;
+      var entry = { ctrl: ctrl, item: item, removed: false, blocked: item.blocked };
+
+      if (ctrl.data.afterWin === 'remove') {
+        ctrl.data.items = ctrl.data.items.filter(function (row) { return row.id !== item.id; });
+        entry.removed = true;
+      } else if (ctrl.data.afterWin === 'block') {
+        item.blocked = true;
+        entry.blocked = true;
       }
 
       renderPanel(ctrl);
       persistState();
-      return { ctrl: ctrl, item: item, removed: removed };
+      return entry;
     });
   }
 
+  /* Di mode dua roda, confetti dikurung di kolom rodanya masing-masing supaya
+     perayaan roda kiri dan roda kanan terpisah jelas. */
+  function celebrate(ctrl, amount) {
+    FWConfetti.burstFrom(ctrl.el.stage, amount, state.mode === 2 ? ctrl.el.root : null);
+  }
+
   function spin(ctrl) {
-    if (ctrl.wheel.spinning || !ctrl.data.items.length) return;
+    if (ctrl.wheel.spinning || eligibleCount(ctrl.data) === 0) return;
 
     setActive(ctrl.index);
     closeModal();
@@ -391,14 +470,14 @@
     runSpin(ctrl).then(function (result) {
       if (!result) return;
       FWSound.win();
-      FWConfetti.burstFrom(ctrl.el.stage, 150);
+      celebrate(result.ctrl, 150);
       showWinners([result]);
     });
   }
 
   function spinAll() {
     var ready = controllers.slice(0, state.mode).filter(function (ctrl) {
-      return !ctrl.wheel.spinning && ctrl.data.items.length > 0;
+      return !ctrl.wheel.spinning && eligibleCount(ctrl.data) > 0;
     });
     if (!ready.length) return;
 
@@ -409,7 +488,7 @@
       var winners = results.filter(Boolean);
       if (!winners.length) return;
       FWSound.win();
-      FWConfetti.burst(global.innerWidth / 2, global.innerHeight * 0.55, 170);
+      winners.forEach(function (entry) { celebrate(entry.ctrl, 130); });
       showWinners(winners);
     });
   }
@@ -423,6 +502,7 @@
   var modalName = $('#winner-name');
   var modalNote = $('#winner-note');
   var btnRemove = $('#winner-remove');
+  var btnBlock = $('#winner-block');
   var btnKeep = $('#winner-keep');
   var btnAgain = $('#winner-again');
   var current = [];
@@ -439,7 +519,7 @@
     var data = entry.ctrl.data;
 
     if (entry.removed) {
-      data.items.push({ id: entry.item.id, label: entry.item.label });
+      data.items.push({ id: entry.item.id, label: entry.item.label, blocked: entry.blocked });
       entry.removed = false;
       toast('"' + entry.item.label + '" dikembalikan ke roda.');
     } else {
@@ -453,6 +533,25 @@
     renderWinnerModal();
   }
 
+  /* Menyetel pemenang agar tetap tampil di roda tapi tidak bisa menang lagi —
+     untuk peserta yang sudah sering menang tapi sayang kalau namanya hilang. */
+  function toggleBlocked(entry) {
+    if (entry.removed) return;
+
+    entry.blocked = !entry.blocked;
+    entry.ctrl.data.items.forEach(function (row) {
+      if (row.id === entry.item.id) row.blocked = entry.blocked;
+    });
+
+    toast(entry.blocked
+      ? '"' + entry.item.label + '" tetap tampil tapi tidak ikut undian lagi.'
+      : '"' + entry.item.label + '" ikut undian lagi.');
+
+    renderPanel(entry.ctrl);
+    persistState();
+    renderWinnerModal();
+  }
+
   function renderWinnerModal() {
     if (!current.length) return;
     var multi = current.length > 1;
@@ -460,6 +559,7 @@
     modalSingle.hidden = multi;
     modalMulti.hidden = !multi;
     btnRemove.hidden = multi;
+    btnBlock.hidden = multi;
 
     if (multi) {
       modalSource.textContent = 'Hasil ' + current.length + ' roda';
@@ -476,25 +576,41 @@
         name.textContent = entry.item.label;
         who.appendChild(source);
         who.appendChild(name);
+        if (entry.blocked && !entry.removed) {
+          var tag = document.createElement('em');
+          tag.textContent = 'tidak ikut undian lagi';
+          who.appendChild(tag);
+        }
 
-        var action = button(
+        var actions = document.createElement('div');
+        actions.className = 'winners__actions';
+
+        actions.appendChild(button(
           entry.removed ? 'Kembalikan' : 'Hapus',
           entry.removed ? 'btn btn--small btn--ghost' : 'btn btn--small btn--danger',
           function () { toggleWinner(entry); }
-        );
+        ));
+
+        if (!entry.removed) {
+          actions.appendChild(button(
+            entry.blocked ? 'Ikutkan' : 'Tidak ikut',
+            'btn btn--small' + (entry.blocked ? ' btn--ghost' : ''),
+            function () { toggleBlocked(entry); }
+          ));
+        }
 
         li.appendChild(who);
-        li.appendChild(action);
+        li.appendChild(actions);
         modalMulti.appendChild(li);
       });
 
       btnAgain.textContent = 'Putar semua lagi';
-      btnAgain.disabled = current.every(function (entry) { return entry.ctrl.data.items.length === 0; });
+      btnAgain.disabled = current.every(function (entry) { return eligibleCount(entry.ctrl.data) === 0; });
       return;
     }
 
     var only = current[0];
-    var left = only.ctrl.data.items.length;
+    var left = eligibleCount(only.ctrl.data);
 
     modalSource.textContent = only.ctrl.data.name;
     modalName.textContent = only.item.label;
@@ -502,11 +618,17 @@
     if (only.removed) {
       btnRemove.textContent = 'Kembalikan ke roda';
       btnRemove.className = 'btn btn--ghost';
-      modalNote.textContent = 'Sudah dihapus dari roda — sisa ' + left + ' nama.';
+      btnBlock.hidden = true;
+      modalNote.textContent = 'Sudah dihapus dari roda — tersisa ' + left + ' nama yang diundi.';
     } else {
       btnRemove.textContent = 'Hapus dari roda';
       btnRemove.className = 'btn btn--danger';
-      modalNote.textContent = 'Hapus agar tidak menang dua kali. Sekarang ada ' + left + ' nama.';
+      btnBlock.hidden = false;
+      btnBlock.textContent = only.blocked ? 'Ikutkan lagi' : 'Tidak ikut lagi';
+      btnBlock.className = only.blocked ? 'btn btn--ghost' : 'btn';
+      modalNote.textContent = only.blocked
+        ? 'Namanya tetap tampil di roda, tapi tidak akan menang lagi. Tersisa ' + left + ' nama yang diundi.'
+        : 'Hapus dari roda, atau biarkan namanya tampil tapi tidak ikut undian lagi. Ada ' + left + ' nama yang diundi.';
     }
 
     btnAgain.textContent = 'Putar lagi';
@@ -515,6 +637,10 @@
 
   btnRemove.addEventListener('click', function () {
     if (current.length === 1) toggleWinner(current[0]);
+  });
+
+  btnBlock.addEventListener('click', function () {
+    if (current.length === 1) toggleBlocked(current[0]);
   });
 
   btnKeep.addEventListener('click', closeModal);
@@ -618,7 +744,10 @@
       name.textContent = entry.name;
       var meta = document.createElement('span');
       meta.className = 'saved__meta';
-      meta.textContent = entry.names.length + ' nama · ' + formatDate(entry.updatedAt || entry.createdAt || Date.now());
+      var blockedCount = (entry.blocked || []).length;
+      meta.textContent = entry.names.length + ' nama'
+        + (blockedCount ? ' · ' + blockedCount + ' tidak diundi' : '')
+        + ' · ' + formatDate(entry.updatedAt || entry.createdAt || Date.now());
       head.appendChild(name);
       head.appendChild(meta);
 
@@ -642,6 +771,7 @@
         var source = state.wheels[Number(saveSource.value) || 0];
         if (!global.confirm('Timpa "' + entry.name + '" dengan isi ' + source.name + ' (' + source.items.length + ' nama)?')) return;
         entry.names = source.items.map(function (item) { return item.label; });
+        entry.blocked = blockedListOf(source);
         entry.updatedAt = Date.now();
         persistSaved();
         renderSaved();
@@ -653,6 +783,7 @@
           id: uid(),
           name: entry.name + ' (salinan)',
           names: entry.names.slice(),
+          blocked: (entry.blocked || []).slice(),
           createdAt: Date.now(),
           updatedAt: Date.now()
         });
@@ -690,7 +821,12 @@
       if (ctrl.data.items.length && !global.confirm('Ganti isi ' + ctrl.data.name + ' dengan "' + entry.name + '"?')) return;
 
       ctrl.data.name = entry.name;
-      ctrl.data.items = entry.names.slice(0, MAX_NAMES).map(function (label) { return { id: uid(), label: label }; });
+      var blockedNames = {};
+      (entry.blocked || []).forEach(function (label) { blockedNames[label.toLowerCase()] = true; });
+
+      ctrl.data.items = entry.names.slice(0, MAX_NAMES).map(function (label) {
+        return { id: uid(), label: label, blocked: !!blockedNames[label.toLowerCase()] };
+      });
       ctrl.data.history = [];
       ctrl.el.title.value = entry.name;
 
@@ -714,12 +850,14 @@
 
     if (existing) {
       existing.names = source.items.map(function (item) { return item.label; });
+      existing.blocked = blockedListOf(source);
       existing.updatedAt = Date.now();
     } else {
       saved.unshift({
         id: uid(),
         name: name,
         names: source.items.map(function (item) { return item.label; }),
+        blocked: blockedListOf(source),
         createdAt: Date.now(),
         updatedAt: Date.now()
       });
@@ -781,6 +919,9 @@
           id: uid(),
           name: String(row.name || 'Roda impor').slice(0, 60),
           names: names,
+          blocked: Array.isArray(row.blocked)
+            ? row.blocked.filter(function (n) { return typeof n === 'string' && names.indexOf(n) >= 0; })
+            : [],
           createdAt: row.createdAt || Date.now(),
           updatedAt: Date.now()
         });

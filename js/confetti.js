@@ -28,8 +28,9 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function makeParticle(x, y, angle, speed) {
+  function makeParticle(x, y, angle, speed, bounds) {
     return {
+      bounds: bounds || null,
       x: x,
       y: y,
       vx: Math.cos(angle) * speed,
@@ -46,22 +47,27 @@
     };
   }
 
-  /* Ledakan dari satu titik + hujan dari atas layar. */
-  function burst(x, y, amount) {
+  /* Ledakan dari satu titik + hujan dari atas.
+     `bounds` = { x0, x1 } membatasi confetti pada satu kolom saja, dipakai saat
+     mode dua roda supaya perayaan roda kiri dan roda kanan tidak bercampur. */
+  function burst(x, y, amount, bounds) {
     if (!init()) return;
 
     var count = amount || 130;
+    var left = bounds ? bounds.x0 : 0;
+    var right = bounds ? bounds.x1 : global.innerWidth;
+    var spread = bounds ? Math.PI * 1.25 : Math.PI * 1.65;
     var i;
 
     for (i = 0; i < count; i++) {
-      var angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.65;
+      var angle = -Math.PI / 2 + (Math.random() - 0.5) * spread;
       var speed = 5 + Math.random() * 12;
-      particles.push(makeParticle(x, y, angle, speed));
+      particles.push(makeParticle(x, y, angle, speed, bounds));
     }
 
     var rain = Math.round(count * 0.45);
     for (i = 0; i < rain; i++) {
-      var p = makeParticle(Math.random() * global.innerWidth, -20 - Math.random() * 160, Math.PI / 2, 1 + Math.random() * 2);
+      var p = makeParticle(left + Math.random() * (right - left), -20 - Math.random() * 160, Math.PI / 2, 1 + Math.random() * 2, bounds);
       p.ttl = 220 + Math.random() * 90;
       particles.push(p);
     }
@@ -93,6 +99,11 @@
 
       var fade = p.life > p.ttl - 40 ? (p.ttl - p.life) / 40 : 1;
       ctx.save();
+      if (p.bounds) {
+        ctx.beginPath();
+        ctx.rect(p.bounds.x0, 0, p.bounds.x1 - p.bounds.x0, h);
+        ctx.clip();
+      }
       ctx.globalAlpha = Math.max(0, fade);
       ctx.translate(p.x, p.y);
       ctx.rotate(p.rot);
@@ -124,10 +135,12 @@
     if (ctx) ctx.clearRect(0, 0, global.innerWidth, global.innerHeight);
   }
 
-  /* Ledakan dari tengah sebuah elemen (mis. roda pemenang). */
-  function burstFrom(el, amount) {
+  /* Ledakan dari tengah sebuah elemen (mis. roda pemenang).
+     `columnEl` opsional: bila diisi, confetti dikurung di dalam lebar elemen itu. */
+  function burstFrom(el, amount, columnEl) {
     var x = global.innerWidth / 2;
     var y = global.innerHeight / 2;
+
     if (el && el.getBoundingClientRect) {
       var r = el.getBoundingClientRect();
       if (r.width || r.height) {
@@ -135,7 +148,14 @@
         y = r.top + r.height / 2;
       }
     }
-    burst(x, y, amount);
+
+    var bounds = null;
+    if (columnEl && columnEl.getBoundingClientRect) {
+      var c = columnEl.getBoundingClientRect();
+      if (c.width > 0) bounds = { x0: c.left, x1: c.right };
+    }
+
+    burst(x, y, amount, bounds);
   }
 
   global.FWConfetti = { burst: burst, burstFrom: burstFrom, stop: stop };

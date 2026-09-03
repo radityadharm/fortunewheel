@@ -11,10 +11,12 @@ Situs statis murni — tanpa framework, tanpa dependency, tanpa proses build.
 | Fitur | Keterangan |
 | --- | --- |
 | **Input nama** | Satu per satu (Enter) atau sekaligus lewat tempel banyak baris/koma. Nama kembar otomatis ditolak. |
-| **Confetti** | Ledakan confetti + suara singkat tiap kali pemenang keluar. |
-| **Hapus pemenang** | Tombol *Hapus dari roda* di kartu pemenang agar tidak menang dua kali — lengkap dengan tombol *Kembalikan* kalau salah pencet. Ada juga opsi **hapus pemenang otomatis**. |
-| **Roda tersimpan** | Simpan daftar nama dengan sebuah nama roda, lalu muat lagi kapan saja. Bisa ditimpa, diduplikat, dihapus, diekspor/impor JSON. |
-| **Dua roda** | Ganti ke mode *2 Roda* untuk menjalankan roda kedua dengan isi berbeda (mis. peserta × hadiah). Bisa diputar sendiri-sendiri atau bareng lewat **Putar semua** — hasilnya tampil bersamaan dalam satu kartu. |
+| **Confetti** | Ledakan confetti + suara singkat tiap kali pemenang keluar. Di mode dua roda, confetti dikurung di kolom rodanya masing-masing sehingga perayaan roda kiri dan kanan terpisah. |
+| **Hapus pemenang** | Tombol *Hapus dari roda* di kartu pemenang agar tidak menang dua kali — lengkap dengan tombol *Kembalikan* kalau salah pencet. |
+| **Tampil tapi tidak diundi** | Untuk peserta yang sudah sering menang: namanya **tetap tampil di roda** (segmen abu-abu bergaris) tapi tidak akan pernah terpilih. Atur lewat tombol ⊘ di daftar nama atau tombol *Tidak ikut lagi* di kartu pemenang, dan bisa dibatalkan kapan saja. |
+| **Setelah menang** | Satu pilihan per roda: pemenang *tetap di roda*, *hapus dari roda*, atau *tidak ikut lagi* secara otomatis. |
+| **Roda tersimpan** | Simpan daftar nama dengan sebuah nama roda, lalu muat lagi kapan saja — status *tidak diundi* ikut tersimpan. Bisa ditimpa, diduplikat, dihapus, diekspor/impor JSON. |
+| **Dua roda** | Ganti ke mode *2 Roda* untuk menjalankan roda kedua dengan isi berbeda (mis. peserta × hadiah). Bisa diputar sendiri-sendiri atau bareng lewat **Putar semua** — kedua pemenang tampil bersamaan dalam satu kartu, masing-masing dengan tombol *Hapus* dan *Tidak ikut*. |
 | **Riwayat** | Daftar pemenang per roda beserta jamnya. |
 | **Tersimpan otomatis** | Semua isi roda, mode, dan pengaturan disimpan di `localStorage` browser. |
 
@@ -77,9 +79,10 @@ vercel.json       konfigurasi deploy statis
 
 ## Catatan teknis
 
-Pemenang ditentukan lebih dulu memakai `crypto.getRandomValues`, baru rotasi
-akhir roda dihitung agar segmen itu benar-benar berhenti tepat di bawah jarum.
-Jadi yang terlihat di layar selalu sama dengan yang diumumkan — bukan ditebak
-dari sudut berhenti.
+Pemenang ditentukan lebih dulu memakai `crypto.getRandomValues` — hanya dari
+segmen yang ikut diundi — baru rotasi akhir roda dihitung agar segmen itu
+benar-benar berhenti tepat di bawah jarum. Jadi yang terlihat di layar selalu
+sama dengan yang diumumkan, dan nama bertanda *tidak diundi* memang tidak
+pernah bisa berhenti di jarum.
 
 Batas praktis: 300 nama per roda.

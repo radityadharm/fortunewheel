@@ -32,6 +32,27 @@
     return PALETTE[slot];
   }
 
+  var stripePattern = null;
+
+  /* Arsiran diagonal sebagai penanda segmen yang tidak ikut diundi. */
+  function stripes(ctx) {
+    if (stripePattern) return stripePattern;
+    var tile = document.createElement('canvas');
+    tile.width = 10;
+    tile.height = 10;
+    var tctx = tile.getContext('2d');
+    tctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    tctx.lineWidth = 3;
+    tctx.beginPath();
+    tctx.moveTo(-2, 12);
+    tctx.lineTo(12, -2);
+    tctx.moveTo(3, 17);
+    tctx.lineTo(17, 3);
+    tctx.stroke();
+    stripePattern = ctx.createPattern(tile, 'repeat');
+    return stripePattern;
+  }
+
   function fitText(ctx, text, maxWidth) {
     if (ctx.measureText(text).width <= maxWidth) return text;
     var cut = text;
@@ -45,7 +66,7 @@
     options = options || {};
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.labels = [];
+    this.slices = [];
     this.rotation = -Math.PI / 6;
     this.spinning = false;
     this.size = 320;
@@ -54,9 +75,16 @@
     this.resize();
   }
 
-  Wheel.prototype.setLabels = function (labels) {
-    this.labels = labels.slice();
+  /* slices: [{ label, blocked }] — yang blocked tetap digambar tapi tidak pernah menang. */
+  Wheel.prototype.setSlices = function (slices) {
+    this.slices = slices.map(function (slice) {
+      return { label: slice.label, blocked: !!slice.blocked };
+    });
     this.draw();
+  };
+
+  Wheel.prototype.eligibleCount = function () {
+    return this.slices.filter(function (slice) { return !slice.blocked; }).length;
   };
 
   Wheel.prototype.resize = function () {
@@ -78,7 +106,7 @@
     var cx = size / 2;
     var cy = size / 2;
     var radius = size / 2 - 8;
-    var n = this.labels.length;
+    var n = this.slices.length;
 
     ctx.clearRect(0, 0, size, size);
     ctx.save();
@@ -108,13 +136,18 @@
 
       for (var i = 0; i < n; i++) {
         var start = this.rotation + i * seg;
+        var blocked = this.slices[i].blocked;
 
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.arc(0, 0, radius, start, start + seg);
         ctx.closePath();
-        ctx.fillStyle = colorFor(i, n);
+        ctx.fillStyle = blocked ? '#39405e' : colorFor(i, n);
         ctx.fill();
+        if (blocked) {
+          ctx.fillStyle = stripes(ctx);
+          ctx.fill();
+        }
         if (n <= 60) {
           ctx.strokeStyle = 'rgba(10,12,20,0.35)';
           ctx.lineWidth = 1.5;
@@ -132,10 +165,10 @@
           ctx.rotate(flipped ? mid + Math.PI : mid);
           ctx.textAlign = flipped ? 'left' : 'right';
           ctx.textBaseline = 'middle';
-          ctx.fillStyle = 'rgba(14,17,30,0.92)';
+          ctx.fillStyle = blocked ? 'rgba(233,236,247,0.6)' : 'rgba(14,17,30,0.92)';
           ctx.font = '700 ' + fontSize + 'px ui-sans-serif, system-ui, sans-serif';
 
-          var text = fitText(ctx, this.labels[i], radius - clearance - 14);
+          var text = fitText(ctx, this.slices[i].label, radius - clearance - 14);
           ctx.fillText(text, flipped ? -(radius - 12) : radius - 12, 0);
           ctx.restore();
         }
@@ -163,7 +196,7 @@
 
   /* Indeks segmen yang berada tepat di bawah jarum untuk rotasi tertentu. */
   Wheel.prototype.indexAt = function (rotation) {
-    var n = this.labels.length;
+    var n = this.slices.length;
     if (!n) return -1;
     var seg = TAU / n;
     var angle = (POINTER_ANGLE - rotation) % TAU;
@@ -171,15 +204,22 @@
     return Math.floor(angle / seg) % n;
   };
 
-  /* Memutar roda; mengembalikan Promise berisi { index, label }. */
+  /* Memutar roda; mengembalikan Promise berisi { index, label }.
+     Segmen yang di-blocked tetap tampil tapi tidak pernah jadi target. */
   Wheel.prototype.spin = function () {
     var self = this;
-    var n = this.labels.length;
+    var n = this.slices.length;
 
     if (this.spinning || n === 0) return Promise.resolve(null);
 
+    var eligible = [];
+    for (var e = 0; e < n; e++) {
+      if (!this.slices[e].blocked) eligible.push(e);
+    }
+    if (!eligible.length) return Promise.resolve(null);
+
     var seg = TAU / n;
-    var target = Math.floor(rand() * n) % n;
+    var target = eligible[Math.floor(rand() * eligible.length) % eligible.length];
     var jitter = (rand() - 0.5) * seg * 0.7;      // supaya tidak selalu pas di tengah
     var turns = 5 + Math.floor(rand() * 3);
     var duration = 4600 + rand() * 1300;
@@ -218,7 +258,7 @@
         self.spinning = false;
 
         var index = self.indexAt(self.rotation);
-        resolve({ index: index, label: self.labels[index] });
+        resolve({ index: index, label: self.slices[index].label });
       }
 
       global.requestAnimationFrame(frame);

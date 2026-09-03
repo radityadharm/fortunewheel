@@ -75,7 +75,14 @@
       </details>
 
       <div class="toolbar">
-        <label class="check"><input type="checkbox" data-role="auto-remove" /> <span>Hapus pemenang otomatis</span></label>
+        <label class="inline-field">
+          <span>Setelah menang</span>
+          <select data-role="after-win">
+            <option value="keep">tetap di roda</option>
+            <option value="remove">hapus dari roda</option>
+            <option value="block">tidak ikut lagi</option>
+          </select>
+        </label>
         <div class="toolbar__spacer"></div>
         <button type="button" class="btn btn--small btn--ghost" data-role="shuffle">Acak</button>
         <button type="button" class="btn btn--small btn--ghost" data-role="clear">Kosongkan</button>
@@ -83,6 +90,7 @@
       </div>
 
       <ul class="names" data-role="list"></ul>
+      <p class="blocked-note" data-role="blocked-note" hidden></p>
 
       <section class="history" data-role="history-box" hidden>
         <div class="history__head">
@@ -107,6 +115,7 @@
       <ul class="winners" id="winner-multi" hidden></ul>
       <div class="modal__actions">
         <button type="button" class="btn btn--danger" id="winner-remove"></button>
+        <button type="button" class="btn" id="winner-block"></button>
         <button type="button" class="btn btn--ghost" id="winner-keep">Tutup</button>
         <button type="button" class="btn btn--primary" id="winner-again">Putar lagi</button>
       </div>
