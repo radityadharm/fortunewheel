@@ -137,6 +137,23 @@
         <button type="button" class="iconbtn" id="close-drawer" aria-label="Tutup">×</button>
       </header>
 
+      <section class="live" id="live-box">
+        <div class="cloud__head">
+          <span class="cloud__dot" id="live-dot" data-state="off" aria-hidden="true"></span>
+          <strong>Layar peserta</strong>
+        </div>
+        <p class="cloud__note" id="live-note"></p>
+        <div class="live__actions">
+          <a class="btn btn--small btn--ghost" href="slide.html" target="_blank" rel="noopener">Buka di perangkat ini</a>
+          <button type="button" class="btn btn--small btn--primary" id="live-start">Buat tautan peserta</button>
+          <button type="button" class="btn btn--small btn--ghost" id="live-stop" hidden>Matikan tautan</button>
+        </div>
+        <div class="live__link" id="live-link-box" hidden>
+          <input type="text" id="live-link" readonly aria-label="Tautan layar peserta" />
+          <button type="button" class="btn btn--small" id="live-copy">Salin</button>
+        </div>
+      </section>
+
       <section class="cloud" id="cloud-box">
         <div class="cloud__head">
           <span class="cloud__dot" id="cloud-dot" data-state="checking" aria-hidden="true"></span>

@@ -86,7 +86,42 @@
     });
   }
 
+  /* ---------- Sesi langsung untuk layar peserta ---------- */
+
+  function liveQuery(id) { return '?s=' + encodeURIComponent(id); }
+
+  function publishLive(id, session) {
+    return global.fetch('api/live' + liveQuery(id), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-code': storedCode()
+      },
+      body: JSON.stringify({ session: session })
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (data) {
+        if (response.ok && data.ok) return { ok: true, session: data.session };
+        return { ok: false, status: response.status, error: data.error || 'failed' };
+      });
+    }).catch(function () {
+      return { ok: false, status: 0, error: 'offline' };
+    });
+  }
+
+  function endLive(id) {
+    return global.fetch('api/live' + liveQuery(id), {
+      method: 'DELETE',
+      headers: { 'x-admin-code': storedCode() }
+    }).then(function (response) {
+      return { ok: response.ok };
+    }).catch(function () {
+      return { ok: false };
+    });
+  }
+
   global.FWCloud = {
+    publishLive: publishLive,
+    endLive: endLive,
     refresh: refresh,
     verify: verify,
     save: save,

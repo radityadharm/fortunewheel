@@ -33,17 +33,22 @@
     </div>
     <p class="slide__hint" id="slide-hint">
       Halaman ini mengikuti roda di tab lain pada browser yang sama — buka <a href="index.html">halaman roda</a>,
-      lalu pindahkan jendela ini ke layar besar.
+      lalu pindahkan jendela ini ke layar besar. Untuk perangkat lain, minta moderator membuat tautan peserta.
     </p>
   </footer>
 
   <template id="board-tpl">
     <section class="board">
-      <header class="board__head">
-        <h2 data-role="name"></h2>
-        <span class="pill" data-role="count"></span>
-      </header>
-      <ul class="board__names" data-role="names"></ul>
+      <div class="board__wheel" data-role="wheel">
+        <canvas data-role="canvas" aria-label="Roda undian"></canvas>
+      </div>
+      <div class="board__side">
+        <header class="board__head">
+          <h2 data-role="name"></h2>
+          <span class="pill" data-role="count"></span>
+        </header>
+        <ul class="board__names" data-role="names"></ul>
+      </div>
     </section>
   </template>
 
@@ -58,6 +63,7 @@
   <script src="js/storage.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/confetti.js"></script>
+  <script src="js/wheel.js"></script>
   <script src="js/slide.js"></script>
 </body>
 </html>

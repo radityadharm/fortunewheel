@@ -72,6 +72,8 @@
     this.size = 320;
     this.onTick = options.onTick || function () {};
     this.emptyText = options.emptyText || 'Tambahkan nama dulu';
+    this.fitParent = !!options.fitParent;   // ukuran mengikuti kotak induk (dipakai layar peserta)
+    this.drawPointer = !!options.drawPointer; // jarum ikut digambar di canvas
     this.resize();
   }
 
@@ -88,9 +90,20 @@
   };
 
   Wheel.prototype.resize = function () {
-    var rect = this.canvas.getBoundingClientRect();
-    var width = rect.width || this.canvas.clientWidth || 320;
-    var size = Math.max(180, Math.round(width));
+    var size;
+
+    if (this.fitParent && this.canvas.parentElement) {
+      /* Roda harus muat utuh di kotaknya — pakai sisi terpendek, lalu ukurannya
+         dipatok dalam piksel CSS supaya tidak pernah gepeng. */
+      var box = this.canvas.parentElement.getBoundingClientRect();
+      size = Math.max(160, Math.round(Math.min(box.width, box.height)));
+      this.canvas.style.width = size + 'px';
+      this.canvas.style.height = size + 'px';
+    } else {
+      var rect = this.canvas.getBoundingClientRect();
+      size = Math.max(180, Math.round(rect.width || this.canvas.clientWidth || 320));
+    }
+
     var dpr = Math.min(global.devicePixelRatio || 1, 2);
 
     this.size = size;
@@ -192,6 +205,24 @@
     ctx.strokeStyle = 'rgba(255,255,255,0.16)';
     ctx.lineWidth = 6;
     ctx.stroke();
+
+    if (this.drawPointer) {
+      var wing = Math.max(9, size * 0.032);
+      var depth = Math.max(18, size * 0.075);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(cx - wing, 1);
+      ctx.lineTo(cx + wing, 1);
+      ctx.lineTo(cx, depth);
+      ctx.closePath();
+      ctx.fillStyle = '#ffcc4d';
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 3;
+      ctx.fill();
+      ctx.restore();
+    }
   };
 
   /* Indeks segmen yang berada tepat di bawah jarum untuk rotasi tertentu. */
@@ -204,42 +235,59 @@
     return Math.floor(angle / seg) % n;
   };
 
-  /* Memutar roda; mengembalikan Promise berisi { index, label }.
-     Segmen yang di-blocked tetap tampil tapi tidak pernah jadi target. */
-  Wheel.prototype.spin = function () {
-    var self = this;
+  /* Menyusun rencana putaran: rotasi awal, rotasi akhir, dan durasinya.
+     Rencana ini dikirim juga ke layar peserta supaya roda di sana berputar
+     persis sama, bahkan kalau pesannya telat sampai. */
+  Wheel.prototype.planSpin = function () {
     var n = this.slices.length;
-
-    if (this.spinning || n === 0) return Promise.resolve(null);
+    if (this.spinning || n === 0) return null;
 
     var eligible = [];
-    for (var e = 0; e < n; e++) {
-      if (!this.slices[e].blocked) eligible.push(e);
+    for (var i = 0; i < n; i++) {
+      if (!this.slices[i].blocked) eligible.push(i);
     }
-    if (!eligible.length) return Promise.resolve(null);
+    if (!eligible.length) return null;
 
     var seg = TAU / n;
     var target = eligible[Math.floor(rand() * eligible.length) % eligible.length];
     var jitter = (rand() - 0.5) * seg * 0.7;      // supaya tidak selalu pas di tengah
     var turns = 5 + Math.floor(rand() * 3);
-    var duration = 4600 + rand() * 1300;
     var from = this.rotation;
 
-    /* Rotasi yang membuat segmen `target` berhenti di bawah jarum, lalu digeser
-       maju beberapa putaran penuh agar animasinya panjang. */
     var to = POINTER_ANGLE - (target * seg + seg / 2) + jitter;
     to += Math.ceil((from + turns * TAU - to) / TAU) * TAU;
 
+    return { from: from, to: to, duration: Math.round(4600 + rand() * 1300) };
+  };
+
+  /* Menjalankan sebuah rencana. `elapsedMs` > 0 berarti menyusul putaran yang
+     sudah berjalan (dipakai layar peserta yang menerima rencananya belakangan). */
+  Wheel.prototype.animateSpin = function (plan, elapsedMs) {
+    var self = this;
+    if (!plan || !this.slices.length) return Promise.resolve(null);
+
+    var offset = Math.max(0, elapsedMs || 0);
+
+    function settle() {
+      self.rotation = ((plan.to % TAU) + TAU) % TAU;
+      self.draw();
+      self.spinning = false;
+      var index = self.indexAt(self.rotation);
+      return index < 0 ? null : { index: index, label: self.slices[index].label };
+    }
+
+    if (offset >= plan.duration) return Promise.resolve(settle());
+
     this.spinning = true;
-    var lastIndex = this.indexAt(from);
+    var lastIndex = this.indexAt(plan.from);
     var startTime = null;
 
     return new Promise(function (resolve) {
       function frame(now) {
-        if (startTime === null) startTime = now;
-        var progress = Math.min(1, (now - startTime) / duration);
+        if (startTime === null) startTime = now - offset;
+        var progress = Math.min(1, (now - startTime) / plan.duration);
 
-        self.rotation = from + (to - from) * easeOutQuart(progress);
+        self.rotation = plan.from + (plan.to - plan.from) * easeOutQuart(progress);
         self.draw();
 
         var current = self.indexAt(self.rotation);
@@ -253,16 +301,20 @@
           return;
         }
 
-        self.rotation = ((to % TAU) + TAU) % TAU;
-        self.draw();
-        self.spinning = false;
-
-        var index = self.indexAt(self.rotation);
-        resolve({ index: index, label: self.slices[index].label });
+        resolve(settle());
       }
 
       global.requestAnimationFrame(frame);
     });
+  };
+
+  /* Memutar roda sendiri; mengembalikan Promise berisi { index, label }.
+     Segmen yang di-blocked tetap tampil tapi tidak pernah jadi target. */
+  Wheel.prototype.spin = function () {
+    var plan = this.planSpin();
+    if (!plan) return Promise.resolve(null);
+    this.lastPlan = plan;
+    return this.animateSpin(plan, 0);
   };
 
   Wheel.colorFor = colorFor;

@@ -18,7 +18,7 @@ Situs statis murni — tanpa framework, tanpa dependency, tanpa proses build.
 | **Roda tersimpan** | Simpan daftar nama dengan sebuah nama roda, lalu muat lagi kapan saja — status *tidak diundi* ikut tersimpan. Bisa ditimpa, diduplikat, dihapus, diekspor/impor JSON. |
 | **Database (opsional)** | Kalau Upstash Redis dipasang di Vercel, roda tersimpan naik ke database sehingga bisa dibuka dari perangkat lain dan tidak hilang saat data browser dibersihkan. Membaca terbuka; menyimpan/menghapus perlu **kode admin**. Tanpa database, aplikasi tetap jalan penuh dengan penyimpanan browser. |
 | **Dua roda** | Ganti ke mode *2 Roda* untuk menjalankan roda kedua dengan isi berbeda (mis. peserta × hadiah). Bisa diputar sendiri-sendiri atau bareng lewat **Putar semua**. Kartu hasil selalu menampilkan pemenang terakhir dari **kedua** roda — memutar roda 2 tidak menghapus pemenang roda 1 — dan yang baru saja diundi diberi tanda *baru saja*. |
-| **Layar peserta** | Halaman `slide.html` untuk diproyeksikan ke layar besar: daftar peserta berukuran besar, status *sedang mengundi*, pengumuman pemenang layar penuh dengan confetti, dan daftar pemenang sejauh ini. Mengikuti halaman roda secara langsung di browser yang sama. |
+| **Layar peserta** | Halaman `slide.html` untuk diproyeksikan ke layar besar: **rodanya ikut berputar** mengikuti moderator, daftar peserta berukuran besar, pengumuman pemenang layar penuh dengan confetti, dan daftar pemenang sejauh ini. Bisa dibuka di tab lain pada browser yang sama, atau **di perangkat lain lewat tautan peserta** kalau database aktif. Dengan dua roda, papannya ditumpuk atas–bawah dan confetti tiap roda tinggal di pitanya sendiri. |
 | **Riwayat** | Daftar pemenang per roda beserta jamnya. |
 | **Tersimpan otomatis** | Semua isi roda, mode, dan pengaturan disimpan di `localStorage` browser. |
 
@@ -28,15 +28,32 @@ menyesuaikan layar ponsel.
 
 ## Layar peserta (halaman slide)
 
-Klik **Layar peserta** di kanan atas — `slide.html` terbuka di tab baru. Pindahkan
-tab itu ke layar/proyektor kedua, lalu jalankan undian seperti biasa di halaman
-roda. Layar peserta ikut berubah sendiri: nama bertambah/berkurang, tanda *tidak
-diundi*, status saat roda berputar, dan pengumuman pemenang berukuran besar.
+Layar untuk penonton: roda besar yang ikut berputar, daftar peserta, dan
+pengumuman pemenang. Ada dua cara membukanya.
 
-Sinkronisasinya lewat `BroadcastChannel` + `localStorage`, jadi berlaku untuk
-tab/jendela lain **di browser yang sama** — cukup untuk laptop yang disambungkan
-ke proyektor. Untuk tampil di perangkat lain (mis. dari komputer berbeda),
-dibutuhkan penyimpanan bersama di server.
+**Di perangkat yang sama** — klik **Layar peserta** di kanan atas (atau buka
+`slide.html`). Tab itu mengikuti halaman roda lewat `BroadcastChannel` +
+`localStorage`, cocok untuk laptop yang dicolok ke proyektor. Tidak perlu
+database.
+
+**Di perangkat lain** — butuh database yang aktif (lihat bagian berikutnya):
+
+1. Buka **Roda tersimpan**, masukkan kode admin.
+2. Di kotak **Layar peserta**, klik **Buat tautan peserta**, lalu salin
+   tautannya (bentuknya `…/slide.html?s=xxxxxxxxxxxx`).
+3. Buka tautan itu di komputer/TV/tablet mana pun.
+
+Perangkat peserta hanya menyimak: ia membaca sesi dari database dan tidak
+pernah bisa menulis apa pun — memutar roda, mengubah nama, atau menyimpan
+tetap perlu kode admin di halaman moderator. Tautan bisa dimatikan kapan saja
+lewat **Matikan tautan**, dan sesinya juga hangus sendiri setelah 12 jam.
+
+Putaran ikut tersinkron karena yang dikirim bukan gambar, melainkan *rencana*
+putaran (rotasi awal, rotasi akhir, durasi) beserta stempel waktu dari server.
+Layar peserta menjalankan rencana yang sama; kalau pesannya baru sampai di
+tengah putaran, animasinya menyusul dari posisi yang seharusnya, bukan
+mengulang dari awal. Jadi roda di kedua layar berhenti di segmen yang sama
+persis.
 
 ## Database roda tersimpan (opsional)
 
@@ -78,10 +95,19 @@ Endpoint `api/wheels.js`:
 | `POST /api/wheels` | memeriksa kode admin | — |
 | `PUT /api/wheels` | menyimpan/memperbarui satu roda | ya |
 | `DELETE /api/wheels?id=…` | menghapus satu roda | ya |
+| `GET /api/live?s=…` | membaca sesi layar peserta | tidak |
+| `PUT /api/live?s=…` | menyiarkan keadaan roda + putaran | ya |
+| `DELETE /api/live?s=…` | mematikan sesi | ya |
 
 Batas yang dijaga server: 200 roda, 300 nama per roda, 60 karakter per nama.
-Data disimpan sebagai satu hash Redis (`fortunewheel:wheels`), bisa diubah lewat
-env `FW_REDIS_KEY`.
+Roda tersimpan ada di satu hash Redis (`fortunewheel:wheels`, ubah lewat env
+`FW_REDIS_KEY`), sedangkan tiap sesi layar peserta jadi satu key
+`fortunewheel:live:<id>` (prefiks lewat `FW_LIVE_PREFIX`) yang kedaluwarsa
+sendiri setelah 12 jam.
+
+Layar peserta menarik data tiap ~1,2 detik selama tabnya terlihat, dan jauh
+lebih jarang saat tersembunyi — satu sesi undian sejam hanya memakai sekitar
+3.000 perintah Redis, masih lapang untuk paket gratis Upstash.
 
 ## Menjalankan di komputer sendiri
 
@@ -137,6 +163,7 @@ js/wheel.js       gambar roda + animasi putaran
 js/app.js         state aplikasi, dua panel roda, modal pemenang, roda tersimpan
 js/cloud.js       klien database (aman diabaikan kalau API tidak ada)
 api/wheels.js     Serverless Function: baca/tulis roda di Upstash Redis
+api/live.js       Serverless Function: sesi langsung untuk layar peserta
 slide.html        layar peserta untuk diproyeksikan
 css/slide.css     tampilan layar peserta
 js/slide.js       isi layar peserta + pengumuman pemenang

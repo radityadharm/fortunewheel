@@ -82,13 +82,95 @@
   }
 
   var settings = FWStorage.read(SETTINGS_KEY, { sound: true }) || { sound: true };
+  if (typeof settings.liveId !== 'string') settings.liveId = '';
 
   function persistState() {
     FWStorage.write(STATE_KEY, state);
     FWSync.publish('state');
+    publishLive(false);
   }
   function persistSaved() { FWStorage.write(SAVED_KEY, saved); }
   function persistSettings() { FWStorage.write(SETTINGS_KEY, settings); }
+
+  /* ---------- Siaran sesi langsung ----------
+     Layar peserta di perangkat lain membaca sesi ini lewat database. Yang
+     dikirim: isi kedua roda + peristiwa terakhir per roda (rencana putaran
+     atau pemenang). Penulisan biasa ditunda sesaat supaya mengetik nama tidak
+     memicu satu tulisan per ketukan; peristiwa putaran dikirim seketika. */
+
+  var liveEvents = {};
+  var liveSeq = 0;
+  var liveTimer = null;
+  var liveWarned = false;
+
+  function liveActive() {
+    return !!settings.liveId && FWCloud.canWrite() && FWCloud.isAdmin();
+  }
+
+  function liveSnapshot() {
+    return {
+      mode: state.mode,
+      title: state.wheels.slice(0, state.mode).map(function (wheel) { return wheel.name; }).join(' & '),
+      wheels: state.wheels.slice(0, state.mode).map(function (wheel) {
+        return {
+          name: wheel.name,
+          items: wheel.items.map(function (item) {
+            return { label: item.label, blocked: !!item.blocked };
+          }),
+          history: wheel.history.slice(0, 12)
+        };
+      }),
+      events: liveEvents
+    };
+  }
+
+  function sendLive() {
+    if (!liveActive()) return;
+    var id = settings.liveId;
+
+    FWCloud.publishLive(id, liveSnapshot()).then(function (result) {
+      if (result.ok) { liveWarned = false; return; }
+      if (settings.liveId !== id) return;
+
+      if (result.status === 401) {
+        FWCloud.forgetCode();
+        renderCloud();
+        renderLive();
+        toast('Kode admin ditolak — tautan peserta berhenti diperbarui.');
+        return;
+      }
+
+      if (!liveWarned) {
+        liveWarned = true;
+        toast('Layar peserta gagal diperbarui. Periksa sambungan internet.');
+      }
+    });
+  }
+
+  function publishLive(immediate) {
+    if (!liveActive()) return;
+
+    if (immediate) {
+      global.clearTimeout(liveTimer);
+      liveTimer = null;
+      sendLive();
+      return;
+    }
+
+    if (liveTimer) return;
+    liveTimer = global.setTimeout(function () {
+      liveTimer = null;
+      sendLive();
+    }, 700);
+  }
+
+  function noteLiveEvent(index, event) {
+    liveSeq += 1;
+    event.seq = liveSeq;
+    event.wheel = index;
+    liveEvents[String(index)] = event;
+    publishLive(true);
+  }
 
   /* ---------- Utilitas nama ---------- */
 
@@ -450,12 +532,24 @@
   function runSpin(ctrl) {
     if (ctrl.wheel.spinning || eligibleCount(ctrl.data) === 0) return Promise.resolve(null);
 
+    var plan = ctrl.wheel.planSpin();
+    if (!plan) return Promise.resolve(null);
+
     ctrl.el.spin.disabled = true;
     ctrl.el.spin.classList.add('is-spinning');
     ctrl.el.spinText.textContent = '...';
-    FWSync.publish('spinning', { wheel: ctrl.index, wheelName: ctrl.data.name });
 
-    return ctrl.wheel.spin().then(function (result) {
+    /* Rencana putaran ikut dikirim supaya roda di layar peserta berputar sama
+       persis, termasuk kalau pesannya baru sampai di tengah putaran. */
+    FWSync.publish('spinning', {
+      wheel: ctrl.index,
+      wheelName: ctrl.data.name,
+      plan: plan,
+      startedAt: Date.now()
+    });
+    noteLiveEvent(ctrl.index, { type: 'spin', plan: plan });
+
+    return ctrl.wheel.animateSpin(plan, 0).then(function (result) {
       ctrl.el.spin.classList.remove('is-spinning');
       ctrl.el.spinText.textContent = 'PUTAR';
       ctrl.el.spin.disabled = eligibleCount(ctrl.data) === 0;
@@ -485,6 +579,7 @@
         wheelName: ctrl.data.name,
         label: item.label
       });
+      noteLiveEvent(ctrl.index, { type: 'winner', label: item.label });
       return entry;
     });
   }
@@ -817,6 +912,7 @@
     return FWCloud.refresh().then(function (result) {
       cloudWheels = result.wheels;
       renderCloud();
+      renderLive();
       renderSaved();
     });
   }
@@ -867,6 +963,7 @@
 
     FWCloud.verify(code).then(function (result) {
       cloudBox.code.value = '';
+      renderLive();
       if (!result.ok) {
         /* Saat memverifikasi, 401 berarti kodenya memang salah — bukan sesi
            admin yang kedaluwarsa seperti pada penyimpanan. */
@@ -878,9 +975,112 @@
     });
   });
 
+  /* ---------- Tautan layar peserta ---------- */
+
+  var liveBox = {
+    dot: $('#live-dot'),
+    note: $('#live-note'),
+    start: $('#live-start'),
+    stop: $('#live-stop'),
+    linkBox: $('#live-link-box'),
+    link: $('#live-link'),
+    copy: $('#live-copy')
+  };
+
+  function newSessionId() {
+    var chars = 'abcdefghijkmnpqrstuvwxyz23456789';
+    var out = '';
+    var buf = new Uint8Array(12);
+
+    if (global.crypto && global.crypto.getRandomValues) global.crypto.getRandomValues(buf);
+    else for (var j = 0; j < buf.length; j++) buf[j] = Math.floor(Math.random() * 256);
+
+    for (var i = 0; i < buf.length; i++) out += chars[buf[i] % chars.length];
+    return out;
+  }
+
+  function liveUrl() {
+    return new URL('slide.html?s=' + encodeURIComponent(settings.liveId), global.location.href).href;
+  }
+
+  function renderLive() {
+    var canHost = FWCloud.canWrite() && FWCloud.isAdmin();
+    var active = !!settings.liveId;
+
+    liveBox.linkBox.hidden = !active;
+    liveBox.stop.hidden = !active;
+    liveBox.start.hidden = active || !canHost;
+
+    if (active) liveBox.link.value = liveUrl();
+
+    if (active && canHost) {
+      liveBox.dot.setAttribute('data-state', 'admin');
+      liveBox.note.textContent = 'Tautan aktif. Siapa pun yang membukanya melihat roda ini berputar secara langsung, tanpa bisa mengubah apa pun.';
+      return;
+    }
+
+    if (active) {
+      liveBox.dot.setAttribute('data-state', 'on');
+      liveBox.note.textContent = 'Tautan berhenti diperbarui karena kamu belum masuk sebagai admin di perangkat ini.';
+      return;
+    }
+
+    liveBox.dot.setAttribute('data-state', 'off');
+
+    if (!FWCloud.isEnabled()) {
+      liveBox.note.textContent = 'Tanpa database, layar peserta hanya bisa dibuka di tab lain pada browser yang sama.';
+    } else if (!canHost) {
+      liveBox.note.textContent = 'Masuk sebagai admin untuk membuat tautan yang bisa dibuka di perangkat lain.';
+    } else {
+      liveBox.note.textContent = 'Buat tautan agar layar peserta bisa dibuka di perangkat lain — misalnya laptop yang tersambung ke proyektor.';
+    }
+  }
+
+  liveBox.start.addEventListener('click', function () {
+    settings.liveId = newSessionId();
+    persistSettings();
+    renderLive();
+    publishLive(true);
+    toast('Tautan peserta dibuat.');
+  });
+
+  liveBox.stop.addEventListener('click', function () {
+    var id = settings.liveId;
+    if (!global.confirm('Matikan tautan peserta? Layar yang sedang terbuka akan berhenti mengikuti.')) return;
+
+    settings.liveId = '';
+    persistSettings();
+    renderLive();
+    if (id) FWCloud.endLive(id);
+    toast('Tautan peserta dimatikan.');
+  });
+
+  liveBox.copy.addEventListener('click', function () {
+    var url = liveBox.link.value;
+
+    function fallback() {
+      liveBox.link.select();
+      try { document.execCommand('copy'); } catch (err) { /* biarkan pengguna menyalin manual */ }
+    }
+
+    if (global.navigator.clipboard && global.navigator.clipboard.writeText) {
+      global.navigator.clipboard.writeText(url).then(function () {
+        toast('Tautan disalin.');
+      }, function () {
+        fallback();
+        toast('Tautan dipilih — tekan Ctrl/Cmd + C.');
+      });
+      return;
+    }
+
+    fallback();
+    toast('Tautan dipilih — tekan Ctrl/Cmd + C.');
+  });
+
   cloudBox.logout.addEventListener('click', function () {
     FWCloud.forgetCode();
     renderCloud();
+    renderLive();
     renderSaved();
     toast('Keluar dari mode admin.');
   });

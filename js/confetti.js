@@ -56,6 +56,7 @@
     var count = amount || 130;
     var left = bounds ? bounds.x0 : 0;
     var right = bounds ? bounds.x1 : global.innerWidth;
+    var top = bounds && typeof bounds.y0 === 'number' ? bounds.y0 : 0;
     var spread = bounds ? Math.PI * 1.25 : Math.PI * 1.65;
     var i;
 
@@ -67,7 +68,7 @@
 
     var rain = Math.round(count * 0.45);
     for (i = 0; i < rain; i++) {
-      var p = makeParticle(left + Math.random() * (right - left), -20 - Math.random() * 160, Math.PI / 2, 1 + Math.random() * 2, bounds);
+      var p = makeParticle(left + Math.random() * (right - left), top - 20 - Math.random() * 160, Math.PI / 2, 1 + Math.random() * 2, bounds);
       p.ttl = 220 + Math.random() * 90;
       particles.push(p);
     }
@@ -92,7 +93,8 @@
       p.y += p.vy;
       p.rot += p.vrot;
 
-      if (p.life > p.ttl || p.y > h + 60) {
+      var floor = p.bounds && typeof p.bounds.y1 === 'number' ? p.bounds.y1 : h;
+      if (p.life > p.ttl || p.y > floor + 60) {
         particles.splice(i, 1);
         continue;
       }
@@ -100,8 +102,10 @@
       var fade = p.life > p.ttl - 40 ? (p.ttl - p.life) / 40 : 1;
       ctx.save();
       if (p.bounds) {
+        var by0 = typeof p.bounds.y0 === 'number' ? p.bounds.y0 : 0;
+        var by1 = typeof p.bounds.y1 === 'number' ? p.bounds.y1 : h;
         ctx.beginPath();
-        ctx.rect(p.bounds.x0, 0, p.bounds.x1 - p.bounds.x0, h);
+        ctx.rect(p.bounds.x0, by0, p.bounds.x1 - p.bounds.x0, by1 - by0);
         ctx.clip();
       }
       ctx.globalAlpha = Math.max(0, fade);
@@ -158,5 +162,32 @@
     burst(x, y, amount, bounds);
   }
 
-  global.FWConfetti = { burst: burst, burstFrom: burstFrom, stop: stop };
+  /* Seperti burstFrom, tapi confetti dikurung pada seluruh kotak elemen —
+     dipakai layar peserta agar perayaan roda atas dan roda bawah terpisah. */
+  function burstIn(originEl, boxEl, amount) {
+    if (!init()) return;
+
+    var x = global.innerWidth / 2;
+    var y = global.innerHeight / 2;
+
+    if (originEl && originEl.getBoundingClientRect) {
+      var r = originEl.getBoundingClientRect();
+      if (r.width || r.height) {
+        x = r.left + r.width / 2;
+        y = r.top + r.height / 2;
+      }
+    }
+
+    var bounds = null;
+    if (boxEl && boxEl.getBoundingClientRect) {
+      var b = boxEl.getBoundingClientRect();
+      if (b.width > 0 && b.height > 0) {
+        bounds = { x0: b.left, x1: b.right, y0: b.top, y1: b.bottom };
+      }
+    }
+
+    burst(x, y, amount, bounds);
+  }
+
+  global.FWConfetti = { burst: burst, burstFrom: burstFrom, burstIn: burstIn, stop: stop };
 })(window);

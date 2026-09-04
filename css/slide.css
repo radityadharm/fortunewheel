@@ -31,29 +31,47 @@
 
 @keyframes blink { 50% { opacity: 0.25; } }
 
-.slide__boards { flex: 1; display: grid; gap: clamp(14px, 1.6vw, 24px); grid-template-columns: 1fr; align-content: center; }
-.slide__boards[data-mode="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (max-width: 820px) { .slide__boards[data-mode="2"] { grid-template-columns: 1fr; } }
+ /* Dua roda ditumpuk atas–bawah, bukan kiri–kanan, supaya confetti tiap roda
+    punya pita sendiri dan tidak saling menutupi. */
+.slide__boards { flex: 1; min-height: 0; display: grid; gap: clamp(12px, 1.4vw, 20px); grid-template-rows: minmax(0, 1fr); }
+.slide__boards[data-mode="2"] { grid-template-rows: repeat(2, minmax(0, 1fr)); }
 
 .board {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
+  gap: clamp(12px, 1.6vw, 26px);
+  align-items: center;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 22px;
-  padding: clamp(14px, 1.6vw, 24px);
+  padding: clamp(12px, 1.4vw, 22px);
 }
 
-.board__head { display: flex; align-items: baseline; gap: 12px; margin-bottom: clamp(10px, 1.2vw, 18px); }
+ /* Lebar kolomnya dipatok persentase, bukan mengikuti isi: kalau kolom ikut
+    menyesuaikan canvas yang ukurannya di-set JS, keduanya saling mengunci di
+    ukuran kecil dan roda tidak pernah membesar. */
+.board__wheel { min-height: 0; height: 100%; width: 100%; display: grid; place-items: center; }
+.board__wheel canvas { display: block; }
+.board__side { min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: clamp(8px, 1vw, 14px); }
+
+@media (max-width: 820px) {
+  .board { grid-template-columns: minmax(0, 1fr); }
+  .board__wheel { max-height: 40vh; }
+}
+
+.board__head { display: flex; align-items: baseline; gap: 12px; }
 .board__head h2 { font-size: clamp(18px, 2vw, 30px); letter-spacing: -0.02em; }
 .board__head .pill { margin-left: auto; font-size: clamp(11px, 1vw, 14px); }
 
-.board__names { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: clamp(7px, 0.8vw, 12px); }
+.board__names { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: clamp(6px, 0.7vw, 11px); overflow: auto; min-height: 0; }
 
 .board__names li {
-  padding: clamp(7px, 0.8vw, 13px) clamp(12px, 1.2vw, 20px);
+  padding: clamp(6px, 0.7vw, 11px) clamp(11px, 1.1vw, 18px);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--line);
-  font-size: clamp(14px, 1.5vw, 24px);
+  font-size: clamp(13px, 1.3vw, 21px);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -64,7 +82,16 @@
 .board__names li .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .board__names li.is-blocked { opacity: 0.5; border-style: dashed; }
 .board__names li.is-blocked .label { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.35); }
-.board__names li.is-blocked::after { content: "tidak diundi"; font-size: 0.6em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.board__names li.is-blocked::after {
+  content: "tidak diundi";
+  flex: none;
+  font-size: 0.55em;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-left: 2px;
+}
 
 .board__names li.is-winner {
   background: linear-gradient(135deg, rgba(255, 204, 77, 0.28), rgba(255, 92, 138, 0.22));
@@ -109,4 +136,7 @@
   color: transparent;
 }
 
-.slide__spinner { text-align: center; }
+ /* Layar tunggu saat sesi peserta belum ada isinya. */
+.waiting { flex: 1; display: grid; place-items: center; text-align: center; gap: 10px; }
+.waiting h2 { font-size: clamp(20px, 2.4vw, 34px); }
+.waiting p { margin: 8px 0 0; color: var(--muted); font-size: clamp(13px, 1.2vw, 17px); max-width: 46ch; line-height: 1.6; }
