@@ -70,6 +70,14 @@ pernah bisa menulis apa pun — memutar roda, mengubah nama, atau menyimpan
 tetap perlu kode admin di halaman moderator. Tautan bisa dimatikan kapan saja
 lewat **Matikan tautan**, dan sesinya juga hangus sendiri setelah 12 jam.
 
+Nomor urut peristiwa ditentukan server, bukan browser moderator. Halaman
+moderator memulai penomorannya dari nol setiap kali dimuat, jadi kalau
+nomornya dipakai apa adanya, sekali moderator menekan refresh nomornya akan
+mundur dan layar peserta berhenti menanggapi apa pun — rodanya diam dan
+confetti tidak muncul lagi. Server memakai pencacah milik sesi yang hanya
+bertambah, dan layar peserta ikut menyamakan diri kalau pencacah itu mundur
+(tanda sesinya sudah diganti atau kedaluwarsa).
+
 Putaran ikut tersinkron karena yang dikirim bukan gambar, melainkan *rencana*
 putaran (rotasi awal, rotasi akhir, durasi) beserta stempel waktu dari server.
 Layar peserta menjalankan rencana yang sama; kalau pesannya baru sampai di

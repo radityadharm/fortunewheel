@@ -464,8 +464,19 @@
     }
 
     var firstLoad = true;
+    var lastCounter = 0;
 
     function handleSession(session, serverNow) {
+      /* Pencacah sesi hanya bertambah. Kalau ia mundur, berarti sesinya sudah
+         diganti atau kedaluwarsa — samakan lagi dari awal daripada menunggu
+         nomor yang tidak akan pernah datang. */
+      var counter = Number(session.seq) || 0;
+      if (counter < lastCounter) {
+        seenSeq = { '0': 0, '1': 0 };
+        firstLoad = true;
+      }
+      lastCounter = counter;
+
       applySnapshot(normalize(session));
       if (animating === 0 && announce.hidden) setStatus('live', 'Terhubung');
 

@@ -100,9 +100,18 @@ function sanitizeEvent(input) {
   if (!input || typeof input !== 'object') return null;
   if (input.type !== 'spin' && input.type !== 'winner' && input.type !== 'hold') return null;
 
+  var origin = String(input.origin || '').slice(0, 40);
+  if (!/^[A-Za-z0-9_-]{4,40}$/.test(origin)) return null;
+
+  /* `origin` + `clientSeq` hanya dipakai untuk mengenali apakah ini peristiwa
+     yang sama dengan yang tersimpan. Nomor urut yang dilihat layar peserta
+     ditentukan server (lihat assignSequence), supaya tidak pernah mundur
+     walau moderator memuat ulang halamannya. */
   var event = {
     type: input.type,
-    seq: Math.max(0, Math.floor(Number(input.seq) || 0)),
+    origin: origin,
+    clientSeq: Math.max(0, Math.floor(Number(input.clientSeq) || 0)),
+    seq: 0,
     wheel: Number(input.wheel) === 1 ? 1 : 0
   };
 
@@ -184,20 +193,37 @@ function sanitizeSession(input, id) {
   };
 }
 
-/* Peristiwa yang stempel waktunya sudah ada tidak boleh distempel ulang saat
-   siaran berikutnya, supaya animasi di layar peserta tidak mengulang. */
-function keepEventStamps(next, previous) {
-  if (!previous || !previous.events) return next;
+/* Menentukan nomor urut peristiwa dari sisi server.
+ *
+ * Halaman moderator memulai penomorannya dari nol setiap kali dimuat, jadi
+ * nomor dari browser tidak bisa dipercaya: sekali moderator menekan refresh,
+ * nomornya akan mundur dan layar peserta berhenti menanggapi apa pun. Di sini
+ * nomor diambil dari pencacah milik sesi yang hanya bertambah, sementara
+ * pasangan origin+clientSeq dipakai untuk mengenali siaran ulang peristiwa
+ * yang sama supaya stempel waktunya tidak diperbarui (kalau diperbarui,
+ * animasi di layar peserta akan mengulang dari awal). */
+function assignSequence(next, previous) {
+  var counter = previous && Number(previous.seq) > 0 ? Math.floor(Number(previous.seq)) : 0;
 
   ['0', '1'].forEach(function (key) {
     var fresh = next.events[key];
-    var old = previous.events[key];
-    if (!fresh || !old) return;
-    if (fresh.seq !== old.seq) return;
-    if (old.startedAt) fresh.startedAt = old.startedAt;
-    if (old.at) fresh.at = old.at;
+    if (!fresh) return;
+
+    var old = previous && previous.events ? previous.events[key] : null;
+    var sama = old && old.origin === fresh.origin && old.clientSeq === fresh.clientSeq;
+
+    if (sama) {
+      fresh.seq = old.seq;
+      if (old.startedAt) fresh.startedAt = old.startedAt;
+      if (old.at) fresh.at = old.at;
+      return;
+    }
+
+    counter += 1;
+    fresh.seq = counter;
   });
 
+  next.seq = counter;
   return next;
 }
 
@@ -228,7 +254,7 @@ module.exports = async function handler(req, res) {
       var previous = null;
       try { previous = previousRaw ? (typeof previousRaw === 'string' ? JSON.parse(previousRaw) : previousRaw) : null; } catch (err) { previous = null; }
 
-      session = keepEventStamps(session, previous);
+      session = assignSequence(session, previous);
 
       await redis(['SET', PREFIX + id, JSON.stringify(session), 'EX', String(TTL_SECONDS)]);
       return json(res, 200, { ok: true, now: Date.now(), session: session });

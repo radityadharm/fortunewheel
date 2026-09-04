@@ -100,6 +100,11 @@
 
   var liveEvents = {};
   var liveSeq = 0;
+
+  /* Penanda satu kali muat halaman. Server memakainya untuk membedakan
+     peristiwa baru dari siaran ulang peristiwa yang sama, sehingga penomoran
+     tetap maju walau halaman ini dimuat ulang di tengah acara. */
+  var liveOrigin = (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)).slice(0, 40);
   var liveTimer = null;
   var liveWarned = false;
 
@@ -166,7 +171,8 @@
 
   function noteLiveEvent(index, event) {
     liveSeq += 1;
-    event.seq = liveSeq;
+    event.origin = liveOrigin;
+    event.clientSeq = liveSeq;
     event.wheel = index;
     liveEvents[String(index)] = event;
     publishLive(true);
