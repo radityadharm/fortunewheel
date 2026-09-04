@@ -33,6 +33,9 @@
       <button type="button" class="btn btn--ghost" id="sound-toggle" aria-pressed="true" title="Suara">
         <span data-role="icon">🔊</span><span class="btn__text">Suara</span>
       </button>
+      <a class="btn btn--ghost" id="open-slide" href="slide.html" target="_blank" rel="noopener" title="Buka layar peserta di jendela baru">
+        <span aria-hidden="true">📺</span><span class="btn__text">Layar peserta</span>
+      </a>
       <button type="button" class="btn btn--primary" id="open-drawer">Roda tersimpan</button>
     </div>
   </header>
@@ -90,7 +93,10 @@
       </div>
 
       <ul class="names" data-role="list"></ul>
-      <p class="blocked-note" data-role="blocked-note" hidden></p>
+      <p class="blocked-note" data-role="blocked-note" hidden>
+        <span data-role="blocked-text"></span>
+        <button type="button" class="linkbtn" data-role="unblock-all">ikutkan semua lagi</button>
+      </p>
 
       <section class="history" data-role="history-box" hidden>
         <div class="history__head">
@@ -158,6 +164,7 @@
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <script src="js/storage.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/confetti.js"></script>
   <script src="js/wheel.js"></script>

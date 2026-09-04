@@ -83,7 +83,10 @@
 
   var settings = FWStorage.read(SETTINGS_KEY, { sound: true }) || { sound: true };
 
-  function persistState() { FWStorage.write(STATE_KEY, state); }
+  function persistState() {
+    FWStorage.write(STATE_KEY, state);
+    FWSync.publish('state');
+  }
   function persistSaved() { FWStorage.write(SAVED_KEY, saved); }
   function persistSettings() { FWStorage.write(SETTINGS_KEY, settings); }
 
@@ -160,6 +163,8 @@
       bulkReplace: pick('bulk-replace'),
       afterWin: pick('after-win'),
       blockedNote: pick('blocked-note'),
+      blockedText: pick('blocked-text'),
+      unblockAll: pick('unblock-all'),
       shuffle: pick('shuffle'),
       clear: pick('clear'),
       save: pick('save'),
@@ -200,6 +205,7 @@
       var names = parseNames(el.nameInput.value);
       if (!names.length) return;
       var result = addNames(data, names);
+      forgetWinner(ctrl);
       el.nameInput.value = '';
       el.nameInput.focus();
       reportAdd(result);
@@ -211,6 +217,7 @@
       var names = parseNames(el.bulkInput.value);
       if (!names.length) { toast('Tidak ada nama untuk ditambahkan.'); return; }
       var result = addNames(data, names);
+      forgetWinner(ctrl);
       el.bulkInput.value = '';
       reportAdd(result);
       renderPanel(ctrl);
@@ -223,6 +230,7 @@
       if (data.items.length && !global.confirm('Ganti seluruh isi "' + data.name + '" dengan daftar baru?')) return;
       data.items = [];
       var result = addNames(data, names);
+      forgetWinner(ctrl);
       el.bulkInput.value = '';
       reportAdd(result);
       renderPanel(ctrl);
@@ -253,12 +261,24 @@
       if (wheel.spinning || !data.items.length) return;
       if (!global.confirm('Kosongkan semua nama di "' + data.name + '"?')) return;
       data.items = [];
+      forgetWinner(ctrl);
       renderPanel(ctrl);
       persistState();
     });
 
     el.save.addEventListener('click', function () {
       openDrawer(index);
+    });
+
+    el.unblockAll.addEventListener('click', function () {
+      if (wheel.spinning) return;
+      var count = data.items.length - eligibleCount(data);
+      if (!count) return;
+
+      data.items.forEach(function (item) { item.blocked = false; });
+      renderPanel(ctrl);
+      persistState();
+      toast(count + ' nama ikut diundi lagi.');
     });
 
     el.clearHistory.addEventListener('click', function () {
@@ -284,6 +304,7 @@
         });
       } else {
         data.items = data.items.filter(function (item) { return item.id !== id; });
+        forgetWinner(ctrl);
       }
 
       renderPanel(ctrl);
@@ -296,6 +317,13 @@
     controllers.push(ctrl);
     renderPanel(ctrl);
     return ctrl;
+  }
+
+  /* Kartu pemenang menahan hasil terakhir tiap roda supaya pemenang roda 1 tidak
+     hilang begitu roda 2 diputar. Hasil itu dilupakan kalau isi rodanya diubah
+     sendiri oleh pengguna (tambah/hapus nama, kosongkan, muat roda lain). */
+  function forgetWinner(ctrl) {
+    ctrl.lastWinner = null;
   }
 
   function reportAdd(result) {
@@ -332,7 +360,7 @@
 
     el.blockedNote.hidden = blocked === 0;
     if (blocked) {
-      el.blockedNote.textContent = blocked === total
+      el.blockedText.textContent = blocked === total
         ? 'Semua nama sedang tidak ikut diundi, jadi roda belum bisa diputar.'
         : blocked + ' nama tetap tampil di roda tapi tidak akan menang.';
     }
@@ -425,6 +453,7 @@
     ctrl.el.spin.disabled = true;
     ctrl.el.spin.classList.add('is-spinning');
     ctrl.el.spinText.textContent = '...';
+    FWSync.publish('spinning', { wheel: ctrl.index, wheelName: ctrl.data.name });
 
     return ctrl.wheel.spin().then(function (result) {
       ctrl.el.spin.classList.remove('is-spinning');
@@ -448,10 +477,23 @@
         entry.blocked = true;
       }
 
+      ctrl.lastWinner = entry;
       renderPanel(ctrl);
       persistState();
+      FWSync.publish('winner', {
+        wheel: ctrl.index,
+        wheelName: ctrl.data.name,
+        label: item.label
+      });
       return entry;
     });
+  }
+
+  /* Pemenang terakhir dari tiap roda yang sedang aktif, urut roda 1 lalu roda 2. */
+  function activeWinners() {
+    return controllers.slice(0, state.mode)
+      .map(function (ctrl) { return ctrl.lastWinner; })
+      .filter(Boolean);
   }
 
   /* Di mode dua roda, confetti dikurung di kolom rodanya masing-masing supaya
@@ -471,7 +513,7 @@
       if (!result) return;
       FWSound.win();
       celebrate(result.ctrl, 150);
-      showWinners([result]);
+      showWinners(activeWinners(), result);
     });
   }
 
@@ -489,7 +531,7 @@
       if (!winners.length) return;
       FWSound.win();
       winners.forEach(function (entry) { celebrate(entry.ctrl, 130); });
-      showWinners(winners);
+      showWinners(activeWinners(), winners[winners.length - 1]);
     });
   }
 
@@ -506,9 +548,11 @@
   var btnKeep = $('#winner-keep');
   var btnAgain = $('#winner-again');
   var current = [];
+  var freshEntry = null;
 
-  function showWinners(results) {
+  function showWinners(results, latest) {
     current = results;
+    freshEntry = latest || null;
     modal.hidden = false;
     renderWinnerModal();
     (current.length > 1 ? btnKeep : btnRemove).focus();
@@ -572,6 +616,10 @@
         who.className = 'who';
         var source = document.createElement('small');
         source.textContent = entry.ctrl.data.name;
+        if (entry === freshEntry) {
+          li.className = 'is-fresh';
+          source.textContent += ' · baru saja';
+        }
         var name = document.createElement('b');
         name.textContent = entry.item.label;
         who.appendChild(source);
@@ -828,6 +876,7 @@
         return { id: uid(), label: label, blocked: !!blockedNames[label.toLowerCase()] };
       });
       ctrl.data.history = [];
+      forgetWinner(ctrl);
       ctrl.el.title.value = entry.name;
 
       renderPanel(ctrl);

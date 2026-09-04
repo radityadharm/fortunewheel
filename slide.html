@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Layar Peserta — Fortune Wheel</title>
+<meta name="description" content="Halaman slide peserta undian yang terhubung langsung dengan roda." />
+<meta name="theme-color" content="#0a0c14" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>" />
+<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/slide.css" />
+</head>
+<body class="slide">
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <header class="slide__top">
+    <div>
+      <h1 id="slide-title">Peserta Undian</h1>
+      <p id="slide-sub">Menunggu data dari halaman roda…</p>
+    </div>
+    <div class="slide__status" id="slide-status" data-state="idle">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="slide-status-text">Siap</span>
+    </div>
+  </header>
+
+  <main class="slide__boards" id="slide-boards" data-mode="1"></main>
+
+  <footer class="slide__foot">
+    <div class="slide__recent" id="slide-recent" hidden>
+      <h2>Pemenang sejauh ini</h2>
+      <ol id="slide-recent-list"></ol>
+    </div>
+    <p class="slide__hint" id="slide-hint">
+      Halaman ini mengikuti roda di tab lain pada browser yang sama — buka <a href="index.html">halaman roda</a>,
+      lalu pindahkan jendela ini ke layar besar.
+    </p>
+  </footer>
+
+  <template id="board-tpl">
+    <section class="board">
+      <header class="board__head">
+        <h2 data-role="name"></h2>
+        <span class="pill" data-role="count"></span>
+      </header>
+      <ul class="board__names" data-role="names"></ul>
+    </section>
+  </template>
+
+  <div class="announce" id="announce" hidden>
+    <div class="announce__inner">
+      <p class="announce__eyebrow" id="announce-source"></p>
+      <p class="announce__label">Pemenangnya</p>
+      <h2 class="announce__name" id="announce-name"></h2>
+    </div>
+  </div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/confetti.js"></script>
+  <script src="js/slide.js"></script>
+</body>
+</html>
