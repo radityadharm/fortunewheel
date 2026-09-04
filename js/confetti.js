@@ -28,9 +28,10 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function makeParticle(x, y, angle, speed, bounds) {
+  function makeParticle(x, y, angle, speed, bounds, tag) {
     return {
       bounds: bounds || null,
+      tag: tag || '',
       x: x,
       y: y,
       vx: Math.cos(angle) * speed,
@@ -50,7 +51,7 @@
   /* Ledakan dari satu titik + hujan dari atas.
      `bounds` = { x0, x1 } membatasi confetti pada satu kolom saja, dipakai saat
      mode dua roda supaya perayaan roda kiri dan roda kanan tidak bercampur. */
-  function burst(x, y, amount, bounds) {
+  function burst(x, y, amount, bounds, tag) {
     if (!init()) return;
 
     var count = amount || 130;
@@ -63,12 +64,12 @@
     for (i = 0; i < count; i++) {
       var angle = -Math.PI / 2 + (Math.random() - 0.5) * spread;
       var speed = 5 + Math.random() * 12;
-      particles.push(makeParticle(x, y, angle, speed, bounds));
+      particles.push(makeParticle(x, y, angle, speed, bounds, tag));
     }
 
     var rain = Math.round(count * 0.45);
     for (i = 0; i < rain; i++) {
-      var p = makeParticle(left + Math.random() * (right - left), top - 20 - Math.random() * 160, Math.PI / 2, 1 + Math.random() * 2, bounds);
+      var p = makeParticle(left + Math.random() * (right - left), top - 20 - Math.random() * 160, Math.PI / 2, 1 + Math.random() * 2, bounds, tag);
       p.ttl = 220 + Math.random() * 90;
       particles.push(p);
     }
@@ -130,7 +131,14 @@
     }
   }
 
-  function stop() {
+  /* Tanpa `tag`, semua confetti dihapus. Dengan `tag`, hanya milik roda itu —
+     supaya memutar roda kedua tidak menyapu perayaan roda pertama. */
+  function stop(tag) {
+    if (tag) {
+      particles = particles.filter(function (p) { return p.tag !== tag; });
+      return;
+    }
+
     particles = [];
     if (raf) {
       global.cancelAnimationFrame(raf);
@@ -141,7 +149,7 @@
 
   /* Ledakan dari tengah sebuah elemen (mis. roda pemenang).
      `columnEl` opsional: bila diisi, confetti dikurung di dalam lebar elemen itu. */
-  function burstFrom(el, amount, columnEl) {
+  function burstFrom(el, amount, columnEl, tag) {
     var x = global.innerWidth / 2;
     var y = global.innerHeight / 2;
 
@@ -159,12 +167,12 @@
       if (c.width > 0) bounds = { x0: c.left, x1: c.right };
     }
 
-    burst(x, y, amount, bounds);
+    burst(x, y, amount, bounds, tag);
   }
 
   /* Seperti burstFrom, tapi confetti dikurung pada seluruh kotak elemen —
      dipakai layar peserta agar perayaan roda atas dan roda bawah terpisah. */
-  function burstIn(originEl, boxEl, amount) {
+  function burstIn(originEl, boxEl, amount, tag) {
     if (!init()) return;
 
     var x = global.innerWidth / 2;
@@ -186,7 +194,7 @@
       }
     }
 
-    burst(x, y, amount, bounds);
+    burst(x, y, amount, bounds, tag);
   }
 
   global.FWConfetti = { burst: burst, burstFrom: burstFrom, burstIn: burstIn, stop: stop };

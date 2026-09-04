@@ -690,7 +690,7 @@
   /* Di mode dua roda, confetti dikurung di kolom rodanya masing-masing supaya
      perayaan roda kiri dan roda kanan terpisah jelas. */
   function celebrate(ctrl, amount) {
-    FWConfetti.burstFrom(ctrl.el.stage, amount, state.mode === 2 ? ctrl.el.root : null);
+    FWConfetti.burstFrom(ctrl.el.stage, amount, state.mode === 2 ? ctrl.el.root : null, 'roda' + ctrl.index);
   }
 
   function announceResult(result) {
@@ -705,7 +705,7 @@
 
     setActive(ctrl.index);
     closeModal();
-    FWConfetti.stop();
+    FWConfetti.stop('roda' + ctrl.index); // confetti roda lain dibiarkan hidup
 
     runSpin(ctrl).then(announceResult);
   }
@@ -719,7 +719,7 @@
 
     setActive(ctrl.index);
     closeModal();
-    FWConfetti.stop();
+    FWConfetti.stop('roda' + ctrl.index);
 
     var config = ctrl.wheel.startFreeSpin();
     if (!config) return;

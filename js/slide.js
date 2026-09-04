@@ -34,8 +34,14 @@
   var recentBox = $('#slide-recent');
   var recentList = $('#slide-recent-list');
   var announce = $('#announce');
-  var announceSource = $('#announce-source');
-  var announceName = $('#announce-name');
+  var bands = Array.prototype.map.call(announce.querySelectorAll('.announce__band'), function (el) {
+    return {
+      root: el,
+      source: el.querySelector('[data-role="source"]'),
+      name: el.querySelector('[data-role="name"]'),
+      timer: null
+    };
+  });
 
   var boards = [];
   var snapshot = null;
@@ -43,7 +49,6 @@
   var animating = 0;
   var seenSeq = { '0': 0, '1': 0 };
   var highlight = {};
-  var announceTimer = null;
   var statusTimer = null;
   var waitingEl = null;
 
@@ -264,10 +269,9 @@
     return global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
-  function pauseRoll(paused) {
-    boards.forEach(function (board) {
-      board.names.classList.toggle('is-paused', !!paused);
-    });
+  function pauseRoll(index, paused) {
+    var board = boards[index];
+    if (board) board.names.classList.toggle('is-paused', !!paused);
   }
 
   function flushPending() {
@@ -312,12 +316,14 @@
     var board = boards[index];
     if (!board || !plan) return;
 
-    announce.hidden = true;
-    highlight = {};
+    hideBand(index);
+    delete highlight[String(index)];
+    board.animating = true;
     animating++;
     setStatus('spinning', 'Sedang mengundi' + (snapshot ? ' — ' + snapshot.wheels[index].name : '') + '…');
 
     board.wheel.animateSpin(plan, elapsed).then(function () {
+      board.animating = false;
       animating = Math.max(0, animating - 1);
       if (animating === 0) setStatus('live', 'Terhubung');
       flushPending();
@@ -330,8 +336,8 @@
     var board = boards[index];
     if (!board || !hold) return;
 
-    announce.hidden = true;
-    highlight = {};
+    hideBand(index);
+    delete highlight[String(index)];
     board.wheel.startFreeSpin({
       from: hold.from,
       speed: hold.speed,
@@ -342,50 +348,101 @@
     setStatus('spinning', 'Sedang mengundi' + (snapshot ? ' — ' + snapshot.wheels[index].name : '') + '…');
   }
 
-  function announceWinner(index, label) {
-    highlight[String(index)] = label;
+  function bandVisible() {
+    for (var i = 0; i < bands.length; i++) {
+      if (!bands[i].root.hidden) return true;
+    }
+    return false;
+  }
 
+  function hideBand(index) {
+    var band = bands[index];
+    if (!band) return;
+
+    global.clearTimeout(band.timer);
+    band.timer = null;
+    band.root.hidden = true;
+    pauseRoll(index, false);
+    announce.hidden = !bandVisible();
+  }
+
+  /* Pita pengumuman ditempatkan tepat di atas papan rodanya. Dengan dua roda
+     yang ditumpuk, pita atas dan pita bawah berdiri sendiri — masing-masing
+     dengan confetti sendiri — jadi dua pemenang bisa keluar bersamaan. */
+  function placeBand(index) {
+    var band = bands[index];
     var board = boards[index];
-    var name = snapshot && snapshot.wheels[index] ? snapshot.wheels[index].name : '';
+    if (!band) return;
 
-    announceSource.textContent = name;
-    announceName.textContent = label;
-    announce.hidden = false;
-    pauseRoll(true);
+    var kotak = board && boards.length > 1 ? board.root.getBoundingClientRect() : null;
 
-    /* Confetti dikurung di pita papan yang menang — dengan dua roda ditumpuk,
-       pita atas dan bawah jadi terpisah bersih. */
-    if (board && snapshot && snapshot.wheels.length > 1) {
-      FWConfetti.burstIn(board.wheelBox, board.root, 150);
+    if (kotak && kotak.height > 0) {
+      band.root.style.top = kotak.top + 'px';
+      band.root.style.left = kotak.left + 'px';
+      band.root.style.width = kotak.width + 'px';
+      band.root.style.height = kotak.height + 'px';
+      band.root.style.setProperty('--announce-size', Math.round(kotak.height * 0.3) + 'px');
     } else {
-      FWConfetti.burst(global.innerWidth * 0.1, global.innerHeight * 0.98, 110);
-      FWConfetti.burst(global.innerWidth * 0.9, global.innerHeight * 0.98, 110);
+      band.root.style.top = '0';
+      band.root.style.left = '0';
+      band.root.style.width = '100%';
+      band.root.style.height = '100%';
+      band.root.style.setProperty('--announce-size', '11vw');
+    }
+  }
+
+  function announceWinner(index, label) {
+    var band = bands[index];
+    var board = boards[index];
+    if (!band) return;
+
+    highlight[String(index)] = label;
+    if (snapshot) applySnapshot(snapshot); // supaya pemenang tersorot di daftar
+
+    band.source.textContent = snapshot && snapshot.wheels[index] ? snapshot.wheels[index].name : '';
+    band.name.textContent = label;
+
+    placeBand(index);
+    band.root.hidden = false;
+    announce.hidden = false;
+    pauseRoll(index, true);
+
+    /* Confetti dikurung di kotak papan yang menang dan diberi tanda supaya
+       perayaan roda lain tidak ikut terhapus. Semburannya dari dua sudut bawah
+       pita agar membingkai namanya, bukan menumpuk di satu sisi. */
+    var tag = 'papan' + index;
+
+    if (board && boards.length > 1) {
+      var kotak = board.root.getBoundingClientRect();
+      var batas = { x0: kotak.left, x1: kotak.right, y0: kotak.top, y1: kotak.bottom };
+
+      FWConfetti.burst(kotak.left + kotak.width * 0.12, kotak.bottom - 6, 85, batas, tag);
+      FWConfetti.burst(kotak.right - kotak.width * 0.12, kotak.bottom - 6, 85, batas, tag);
+    } else {
+      FWConfetti.burst(global.innerWidth * 0.1, global.innerHeight * 0.98, 110, null, tag);
+      FWConfetti.burst(global.innerWidth * 0.9, global.innerHeight * 0.98, 110, null, tag);
     }
 
     setStatus('live', 'Pemenang keluar');
 
-    global.clearTimeout(announceTimer);
-    announceTimer = global.setTimeout(function () {
-      announce.hidden = true;
-      pauseRoll(false);
-    }, ANNOUNCE_MS);
-
-    if (snapshot) applySnapshot(snapshot); // supaya pemenang tersorot di daftar
+    global.clearTimeout(band.timer);
+    band.timer = global.setTimeout(function () { hideBand(index); }, ANNOUNCE_MS);
   }
 
-  /* Menunggu animasi selesai dulu kalau pengumumannya menyusul terlalu cepat. */
+  /* Menunggu roda papan ini berhenti dulu — papan lain tidak ikut ditunggu,
+     supaya pemenang roda pertama tidak tertahan oleh roda kedua yang masih
+     berputar. */
   function queueWinner(index, label) {
-    if (busy()) {
+    var board = boards[index];
+    if (board && (board.animating || board.wheel.isFreeSpinning())) {
       global.setTimeout(function () { queueWinner(index, label); }, 200);
       return;
     }
     announceWinner(index, label);
   }
 
-  announce.addEventListener('click', function () {
-    global.clearTimeout(announceTimer);
-    announce.hidden = true;
-    pauseRoll(false);
+  bands.forEach(function (band, index) {
+    band.root.addEventListener('click', function () { hideBand(index); });
   });
 
   /* ---------- Sumber 1: tab lain di browser yang sama ---------- */
@@ -532,9 +589,11 @@
   global.addEventListener('resize', function () {
     global.clearTimeout(resizeTimer);
     resizeTimer = global.setTimeout(function () {
-      boards.forEach(function (board) {
+      boards.forEach(function (board, i) {
         board.wheel.resize();
         setupRoll(board);
+        if (!bands[i] || bands[i].root.hidden) return;
+        placeBand(i);
       });
     }, 150);
   });

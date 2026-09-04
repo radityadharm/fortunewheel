@@ -150,14 +150,28 @@
 .slide__hint a { color: var(--accent); }
 
 /* Pengumuman pemenang menutupi seluruh layar. */
-.announce { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(6, 8, 16, 0.86); backdrop-filter: blur(6px); }
-.announce__inner { text-align: center; padding: 30px; animation: rise 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.announce { position: fixed; inset: 0; z-index: 80; pointer-events: none; }
+
+/* Tiap pita menempati kotak rodanya sendiri (posisinya diatur dari JS), jadi
+   dua pemenang bisa diumumkan bersamaan tanpa saling menimpa. */
+.announce__band {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  background: rgba(6, 8, 16, 0.86);
+  backdrop-filter: blur(6px);
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.announce__inner { text-align: center; padding: 24px; animation: rise 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
 .announce__eyebrow { margin: 0 0 18px; font-size: clamp(12px, 1.4vw, 18px); letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
 .announce__label { margin: 0; font-size: clamp(14px, 1.6vw, 22px); color: var(--muted); }
 
 .announce__name {
   margin: 10px 0 0;
-  font-size: clamp(44px, 11vw, 170px);
+  font-size: clamp(34px, var(--announce-size, 11vw), 170px);
   line-height: 1.05;
   letter-spacing: -0.04em;
   overflow-wrap: anywhere;

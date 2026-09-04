@@ -21,7 +21,7 @@ Situs statis murni — tanpa framework, tanpa dependency, tanpa proses build.
 | **Roda tersimpan** | Simpan daftar nama dengan sebuah nama roda, lalu muat lagi kapan saja — status *tidak diundi* ikut tersimpan. Bisa ditimpa, diduplikat, dihapus, diekspor/impor JSON. |
 | **Database (opsional)** | Kalau Upstash Redis dipasang di Vercel, roda tersimpan naik ke database sehingga bisa dibuka dari perangkat lain dan tidak hilang saat data browser dibersihkan. Membaca terbuka; menyimpan/menghapus perlu **kode admin**. Tanpa database, aplikasi tetap jalan penuh dengan penyimpanan browser. |
 | **Dua roda** | Ganti ke mode *2 Roda* untuk menjalankan roda kedua dengan isi berbeda (mis. peserta × hadiah). Bisa diputar sendiri-sendiri atau bareng lewat **Putar semua**. Kartu hasil selalu menampilkan pemenang terakhir dari **kedua** roda — memutar roda 2 tidak menghapus pemenang roda 1 — dan yang baru saja diundi diberi tanda *baru saja*. |
-| **Layar peserta** | Halaman `slide.html` untuk diproyeksikan ke layar besar: **rodanya ikut berputar** mengikuti moderator, daftar peserta berukuran besar yang **bergulir sendiri** kalau namanya tidak muat, pengumuman pemenang layar penuh dengan confetti, dan daftar pemenang sejauh ini. Bisa dibuka di tab lain pada browser yang sama, atau **di perangkat lain lewat tautan peserta** kalau database aktif. Dengan dua roda, papannya ditumpuk atas–bawah dan confetti tiap roda tinggal di pitanya sendiri. |
+| **Layar peserta** | Halaman `slide.html` untuk diproyeksikan ke layar besar: **rodanya ikut berputar** mengikuti moderator, daftar peserta berukuran besar yang **bergulir sendiri** kalau namanya tidak muat, pengumuman pemenang dengan confetti, dan daftar pemenang sejauh ini. Dengan dua roda, tiap roda punya pita pengumuman sendiri (atas dan bawah) sehingga **dua pemenang bisa diumumkan bersamaan**, masing-masing dengan confettinya sendiri. Bisa dibuka di tab lain pada browser yang sama, atau **di perangkat lain lewat tautan peserta** kalau database aktif. Dengan dua roda, papannya ditumpuk atas–bawah dan confetti tiap roda tinggal di pitanya sendiri. |
 | **Riwayat** | Daftar pemenang per roda beserta jamnya. |
 | **Tersimpan otomatis** | Semua isi roda, mode, dan pengaturan disimpan di `localStorage` browser. |
 
@@ -208,6 +208,10 @@ benar-benar berhenti tepat di bawah jarum. Jadi yang terlihat di layar selalu
 sama dengan yang diumumkan, dan nama bertanda *tidak diundi* memang tidak
 pernah bisa berhenti di jarum. Saat tombolnya ditahan, undiannya baru dilakukan
 pada detik tombol dilepas.
+
+Confetti tiap roda diberi tanda tersendiri, jadi memutar roda kedua tidak
+menyapu perayaan roda pertama yang masih melayang, dan tiap ledakan dikurung
+di kotak rodanya masing-masing.
 
 Daftar nama di layar peserta digulung dengan menggandakan isinya lalu
 menggesernya setengah tinggi — perulangannya jadi mulus tanpa lompatan. Layar

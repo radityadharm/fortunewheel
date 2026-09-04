@@ -54,11 +54,21 @@
     </section>
   </template>
 
+  <!-- Satu pita pengumuman per roda, supaya dua pemenang bisa muncul bersamaan. -->
   <div class="announce" id="announce" hidden>
-    <div class="announce__inner">
-      <p class="announce__eyebrow" id="announce-source"></p>
-      <p class="announce__label">Pemenangnya</p>
-      <h2 class="announce__name" id="announce-name"></h2>
+    <div class="announce__band" data-band="0" hidden>
+      <div class="announce__inner">
+        <p class="announce__eyebrow" data-role="source"></p>
+        <p class="announce__label">Pemenangnya</p>
+        <h2 class="announce__name" data-role="name"></h2>
+      </div>
+    </div>
+    <div class="announce__band" data-band="1" hidden>
+      <div class="announce__inner">
+        <p class="announce__eyebrow" data-role="source"></p>
+        <p class="announce__label">Pemenangnya</p>
+        <h2 class="announce__name" data-role="name"></h2>
+      </div>
     </div>
   </div>
 
