@@ -39,10 +39,29 @@ database.
 
 **Di perangkat lain** — butuh database yang aktif (lihat bagian berikutnya):
 
-1. Buka **Roda tersimpan**, masukkan kode admin.
-2. Di kotak **Layar peserta**, klik **Buat tautan peserta**, lalu salin
-   tautannya (bentuknya `…/slide.html?s=xxxxxxxxxxxx`).
-3. Buka tautan itu di komputer/TV/tablet mana pun.
+1. Klik **Layar peserta** di kanan atas; panelnya terbuka di kotak *Layar peserta*.
+2. Masukkan **kode admin** di kotak *Database* tepat di bawahnya.
+3. Klik **Buat tautan peserta**, lalu **Salin**. Tautannya berbentuk
+   `…/slide.html?s=xxxxxxxxxxxx` — kode di belakang itulah alamat sesinya.
+4. Buka tautan tersebut di komputer/TV/tablet mana pun.
+
+Tombol **Buka di perangkat ini** sengaja tanpa kode: itu jalan pintas untuk tab
+lain di browser yang sama, bukan tautan yang bisa dibagikan.
+
+### Kalau tombol "Buat tautan peserta" tidak muncul
+
+Kotak *Layar peserta* selalu menyebutkan penyebabnya. Urutan pemeriksaannya:
+
+| Yang tertulis | Artinya | Perbaikannya |
+| --- | --- | --- |
+| menyebut folder `api/` | situs dibuka dari berkas lokal atau hosting statis biasa | deploy ke Vercel, karena tautan peserta perlu bagian server |
+| menyebut Upstash | fungsi servernya jalan, tapi Redis belum tersambung | Vercel → Storage → Marketplace → Upstash (Redis) → Connect to Project |
+| menyebut `ADMIN_CODE` | database siap, tapi belum ada kode admin | Vercel → Settings → Environment Variables → tambah `ADMIN_CODE`, lalu deploy ulang |
+| meminta kode admin | semuanya siap, tinggal masuk | masukkan kodenya di kotak *Database* |
+
+Untuk memastikan sisi servernya, buka `https://alamat-situsmu/api/wheels` di
+browser. Jawaban `{"enabled":true,"canWrite":true,…}` berarti database dan kode
+admin sudah beres.
 
 Perangkat peserta hanya menyimak: ia membaca sesi dari database dan tidak
 pernah bisa menulis apa pun — memutar roda, mengubah nama, atau menyimpan

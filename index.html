@@ -33,9 +33,9 @@
       <button type="button" class="btn btn--ghost" id="sound-toggle" aria-pressed="true" title="Suara">
         <span data-role="icon">🔊</span><span class="btn__text">Suara</span>
       </button>
-      <a class="btn btn--ghost" id="open-slide" href="slide.html" target="_blank" rel="noopener" title="Buka layar peserta di jendela baru">
+      <button type="button" class="btn btn--ghost" id="open-slide" title="Atur layar peserta: buka di perangkat ini atau buat tautan untuk perangkat lain">
         <span aria-hidden="true">📺</span><span class="btn__text">Layar peserta</span>
-      </a>
+      </button>
       <button type="button" class="btn btn--primary" id="open-drawer">Roda tersimpan</button>
     </div>
   </header>
@@ -151,6 +151,7 @@
         <div class="live__link" id="live-link-box" hidden>
           <input type="text" id="live-link" readonly aria-label="Tautan layar peserta" />
           <button type="button" class="btn btn--small" id="live-copy">Salin</button>
+          <a class="btn btn--small btn--ghost" id="live-open" href="#" target="_blank" rel="noopener">Buka</a>
         </div>
       </section>
 

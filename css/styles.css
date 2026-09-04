@@ -515,6 +515,12 @@ a.btn { text-decoration: none; }
   background: rgba(0, 0, 0, 0.22);
 }
 
+@keyframes flash {
+  0%, 100% { border-color: var(--line); }
+  30% { border-color: rgba(255, 204, 77, 0.75); box-shadow: 0 0 0 4px rgba(255, 204, 77, 0.12); }
+}
+
+.live.is-flash { animation: flash 1.4s ease-out; }
 .live__actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .live__actions .btn { text-decoration: none; }
 .live__link { display: flex; gap: 7px; margin-top: 9px; }

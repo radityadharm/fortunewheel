@@ -1072,6 +1072,7 @@
     stop: $('#live-stop'),
     linkBox: $('#live-link-box'),
     link: $('#live-link'),
+    open: $('#live-open'),
     copy: $('#live-copy')
   };
 
@@ -1099,7 +1100,10 @@
     liveBox.stop.hidden = !active;
     liveBox.start.hidden = active || !canHost;
 
-    if (active) liveBox.link.value = liveUrl();
+    if (active) {
+      liveBox.link.value = liveUrl();
+      liveBox.open.href = liveUrl();
+    }
 
     if (active && canHost) {
       liveBox.dot.setAttribute('data-state', 'admin');
@@ -1116,12 +1120,31 @@
     liveBox.dot.setAttribute('data-state', 'off');
 
     if (!FWCloud.isEnabled()) {
-      liveBox.note.textContent = 'Tanpa database, layar peserta hanya bisa dibuka di tab lain pada browser yang sama.';
-    } else if (!canHost) {
-      liveBox.note.textContent = 'Masuk sebagai admin untuk membuat tautan yang bisa dibuka di perangkat lain.';
-    } else {
-      liveBox.note.textContent = 'Buat tautan agar layar peserta bisa dibuka di perangkat lain — misalnya laptop yang tersambung ke proyektor.';
+      /* Sebutkan penyebabnya, bukan cuma "tidak bisa" — kalau tidak, orang
+         mengira tautannya rusak padahal databasenya memang belum disetel. */
+      var reason = FWCloud.reason();
+
+      if (reason === 'offline') {
+        liveBox.note.textContent = 'Server tidak bisa dihubungi. Layar peserta masih bisa dibuka di tab lain pada browser ini.';
+      } else if (reason === 'no_api') {
+        liveBox.note.textContent = 'Situs ini belum menjalankan bagian server (folder api/). Kalau dibuka langsung dari berkas atau hosting statis biasa, tautan lintas perangkat memang belum bisa dibuat.';
+      } else {
+        liveBox.note.textContent = 'Database belum tersambung, jadi tautan lintas perangkat belum bisa dibuat. Di Vercel: Storage → Marketplace → Upstash (Redis) → Connect to Project, lalu deploy ulang.';
+      }
+      return;
     }
+
+    if (!FWCloud.canWrite()) {
+      liveBox.note.textContent = 'Database tersambung, tapi env ADMIN_CODE belum diisi di Vercel — tanpa itu tidak ada yang boleh menyiarkan sesi.';
+      return;
+    }
+
+    if (!FWCloud.isAdmin()) {
+      liveBox.note.textContent = 'Masukkan kode admin di kotak Database di bawah, lalu tombol "Buat tautan peserta" akan muncul di sini.';
+      return;
+    }
+
+    liveBox.note.textContent = 'Buat tautan agar layar peserta bisa dibuka di perangkat lain — misalnya laptop atau TV yang tersambung ke proyektor.';
   }
 
   liveBox.start.addEventListener('click', function () {
@@ -1424,6 +1447,15 @@
   });
 
   $('#open-drawer').addEventListener('click', function () { openDrawer(activeIndex); });
+
+  $('#open-slide').addEventListener('click', function () {
+    openDrawer(activeIndex);
+    var box = $('#live-box');
+    box.scrollIntoView({ block: 'nearest' });
+    box.classList.remove('is-flash');
+    void box.offsetWidth; // paksa animasinya mengulang
+    box.classList.add('is-flash');
+  });
   $('#close-drawer').addEventListener('click', closeDrawer);
   drawer.querySelector('[data-role="dismiss"]').addEventListener('click', closeDrawer);
 
