@@ -59,7 +59,7 @@
   function signatureOf(slices) {
     var out = '';
     for (var i = 0; i < slices.length; i++) {
-      out += (slices[i].blocked ? '1' : '0') + slices[i].label + '\n';
+      out += (slices[i].blocked ? '1' : '0') + (slices[i].marked ? 'm' : '') + slices[i].label + '\n';
     }
     return out;
   }
@@ -89,13 +89,21 @@
     this.free = null;        // sedang ditahan berputar
     this.fitParent = !!options.fitParent;   // ukuran mengikuti kotak induk (dipakai layar peserta)
     this.drawPointer = !!options.drawPointer; // jarum ikut digambar di canvas
+    /* Di layar peserta, nama yang tidak ikut diundi tidak ditandai apa pun —
+       penandaan itu urusan halaman moderasi saja. */
+    this.markBlocked = options.markBlocked !== false;
     this.resize();
   }
 
   /* slices: [{ label, blocked }] — yang blocked tetap digambar tapi tidak pernah menang. */
   Wheel.prototype.setSlices = function (slices) {
+    var self = this;
     var next = slices.map(function (slice) {
-      return { label: slice.label, blocked: !!slice.blocked };
+      return {
+        label: slice.label,
+        blocked: !!slice.blocked,                              // menentukan kelayakan undian
+        marked: self.markBlocked && !!slice.blocked            // menentukan tampilannya saja
+      };
     });
 
     var key = signatureOf(next);
@@ -173,16 +181,16 @@
 
     for (var i = 0; i < n; i++) {
       var start = i * seg;
-      var blocked = this.slices[i].blocked;
+      var marked = this.slices[i].marked;
 
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.arc(0, 0, radius, start, start + seg);
       ctx.closePath();
-      ctx.fillStyle = blocked ? '#39405e' : colorFor(i, n);
+      ctx.fillStyle = marked ? '#39405e' : colorFor(i, n);
       ctx.fill();
 
-      if (blocked) {
+      if (marked) {
         ctx.fillStyle = stripes(ctx);
         ctx.fill();
       }
@@ -203,7 +211,7 @@
       ctx.save();
       ctx.rotate(flipped ? mid + Math.PI : mid);
       ctx.textAlign = flipped ? 'left' : 'right';
-      ctx.fillStyle = blocked ? 'rgba(233,236,247,0.6)' : 'rgba(14,17,30,0.92)';
+      ctx.fillStyle = marked ? 'rgba(233,236,247,0.6)' : 'rgba(14,17,30,0.92)';
       ctx.font = '700 ' + fontSize + 'px ui-sans-serif, system-ui, sans-serif';
       ctx.fillText(fitText(ctx, this.slices[i].label, radius - clearance - 14), flipped ? -(radius - 12) : radius - 12, 0);
       ctx.restore();

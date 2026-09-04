@@ -325,6 +325,29 @@ a.btn { text-decoration: none; }
 .inline-field select:focus { outline: none; border-color: rgba(255, 204, 77, 0.5); }
 
 /* ============ Daftar nama ============ */
+.search { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.search input::placeholder { color: #6f7796; }
+.search input:focus { outline: none; border-color: rgba(255, 204, 77, 0.5); background: rgba(0, 0, 0, 0.42); }
+.search__count { flex: none; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.names[data-empty-search="true"]::after {
+  content: "Tidak ada nama yang cocok.";
+  color: var(--muted);
+  font-size: 13px;
+  padding: 6px 2px;
+}
+
 .names {
   list-style: none;
   margin: 0 0 12px;
@@ -360,6 +383,8 @@ a.btn { text-decoration: none; }
 .names li.is-new { animation: pop 0.18s ease-out; }
 
 .names li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.names li .crown { font-style: normal; font-size: 12px; line-height: 1; flex: none; }
+.names li.is-won { border-color: rgba(255, 204, 77, 0.4); background: rgba(255, 204, 77, 0.08); }
 .names li .swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 
 .names li .chipbtn {

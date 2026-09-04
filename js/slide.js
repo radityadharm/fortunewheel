@@ -63,7 +63,7 @@
           items: (Array.isArray(wheel.items) ? wheel.items : []).filter(function (item) {
             return item && typeof item.label === 'string';
           }).map(function (item) {
-            return { label: item.label, blocked: !!item.blocked };
+            return { label: item.label, blocked: !!item.blocked, won: !!item.won };
           }),
           history: Array.isArray(wheel.history) ? wheel.history : []
         };
@@ -116,7 +116,13 @@
         name: root.querySelector('[data-role="name"]'),
         count: root.querySelector('[data-role="count"]'),
         names: root.querySelector('[data-role="names"]'),
-        wheel: new FWWheel(canvas, { fitParent: true, drawPointer: true, emptyText: 'Menunggu peserta' })
+        namesBox: root.querySelector('[data-role="names-box"]'),
+        wheel: new FWWheel(canvas, {
+          fitParent: true,
+          drawPointer: true,
+          markBlocked: false, // penandaan "tidak diundi" hanya di halaman moderasi
+          emptyText: 'Menunggu peserta'
+        })
       };
 
       boards.push(board);
@@ -143,19 +149,31 @@
 
     next.wheels.forEach(function (wheel, index) {
       var board = boards[index];
-      var blocked = wheel.items.filter(function (item) { return item.blocked; }).length;
-
       totalNames += wheel.items.length;
-      totalBlocked += blocked;
+      totalBlocked += wheel.items.filter(function (item) { return item.won; }).length;
+
+      var sudahMenang = wheel.items.filter(function (item) { return item.won; }).length;
 
       board.name.textContent = wheel.name;
-      board.count.textContent = blocked
-        ? wheel.items.length + ' nama · ' + blocked + ' tidak diundi'
-        : wheel.items.length + ' nama';
+      board.count.textContent = sudahMenang
+        ? wheel.items.length + ' peserta · ' + sudahMenang + ' sudah menang'
+        : wheel.items.length + ' peserta';
 
       board.wheel.setSlices(wheel.items);
       board.wheel.resize();
 
+      /* Daftar hanya dibangun ulang kalau isinya berubah. Kalau tidak, tiap
+         penarikan data (tiap ~1,2 detik) akan mengulang animasi gulungannya
+         dari awal sehingga terlihat mandek. */
+      var itemsKey = wheel.items.map(function (item) {
+        return (item.won ? '*' : '') + item.label;
+      }).join('|') + '#' + (highlight[String(index)] || '');
+
+      if (board.itemsKey === itemsKey) return;
+      board.itemsKey = itemsKey;
+
+      /* Semua nama tampil sama rata di layar peserta — yang sudah menang
+         ditandai mahkota, dan status "tidak diundi" sengaja tidak terlihat. */
       board.names.textContent = '';
       wheel.items.forEach(function (item, i) {
         var li = document.createElement('li');
@@ -163,25 +181,35 @@
 
         var dot = document.createElement('i');
         dot.className = 'swatch';
-        dot.style.background = item.blocked ? '#39405e' : FWWheel.colorFor(i, wheel.items.length);
+        dot.style.background = FWWheel.colorFor(i, wheel.items.length);
 
         var label = document.createElement('span');
         label.className = 'label';
         label.textContent = item.label;
 
-        if (item.blocked) classes.push('is-blocked');
+        li.appendChild(dot);
+
+        if (item.won) {
+          classes.push('is-won');
+          var crown = document.createElement('i');
+          crown.className = 'crown';
+          crown.textContent = '👑';
+          li.appendChild(crown);
+        }
+
         if (highlight[String(index)] === item.label) classes.push('is-winner');
         li.className = classes.join(' ');
 
-        li.appendChild(dot);
         li.appendChild(label);
         board.names.appendChild(li);
       });
+
+      setupRoll(board);
     });
 
     titleEl.textContent = next.wheels.map(function (wheel) { return wheel.name; }).join(' & ');
     subEl.textContent = totalBlocked
-      ? totalNames + ' peserta · ' + totalBlocked + ' tidak ikut diundi'
+      ? totalNames + ' peserta · ' + totalBlocked + ' sudah menang'
       : totalNames + ' peserta siap diundi';
 
     renderRecent(next.wheels);
@@ -194,6 +222,52 @@
       if (boards[i].wheel.isFreeSpinning()) return true;
     }
     return false;
+  }
+
+  /* Kalau nama peserta lebih banyak dari ruang yang ada, daftarnya digulung
+     terus-menerus. Isinya digandakan supaya perulangannya mulus: menggeser
+     setengah tinggi track sama dengan kembali ke posisi semula. */
+  var ROLL_SPEED = 26; // piksel per detik
+
+  function setupRoll(board) {
+    var track = board.names;
+    var box = board.namesBox;
+
+    track.classList.remove('is-rolling');
+    track.style.removeProperty('--roll-duration');
+
+    // buang salinan lama sebelum mengukur ulang
+    var clones = track.querySelectorAll('[data-clone="true"]');
+    for (var i = 0; i < clones.length; i++) clones[i].remove();
+
+    if (!box || reduceMotion()) return;
+
+    global.requestAnimationFrame(function () {
+      var isi = track.scrollHeight;
+      var ruang = box.clientHeight;
+      if (!isi || isi <= ruang + 4) return; // masih muat, tidak perlu bergulir
+
+      var asli = Array.prototype.slice.call(track.children);
+      asli.forEach(function (node) {
+        var salinan = node.cloneNode(true);
+        salinan.setAttribute('data-clone', 'true');
+        salinan.setAttribute('aria-hidden', 'true');
+        track.appendChild(salinan);
+      });
+
+      track.style.setProperty('--roll-duration', Math.round(isi / ROLL_SPEED) + 's');
+      track.classList.add('is-rolling');
+    });
+  }
+
+  function reduceMotion() {
+    return global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function pauseRoll(paused) {
+    boards.forEach(function (board) {
+      board.names.classList.toggle('is-paused', !!paused);
+    });
   }
 
   function flushPending() {
@@ -277,6 +351,7 @@
     announceSource.textContent = name;
     announceName.textContent = label;
     announce.hidden = false;
+    pauseRoll(true);
 
     /* Confetti dikurung di pita papan yang menang — dengan dua roda ditumpuk,
        pita atas dan bawah jadi terpisah bersih. */
@@ -290,7 +365,10 @@
     setStatus('live', 'Pemenang keluar');
 
     global.clearTimeout(announceTimer);
-    announceTimer = global.setTimeout(function () { announce.hidden = true; }, ANNOUNCE_MS);
+    announceTimer = global.setTimeout(function () {
+      announce.hidden = true;
+      pauseRoll(false);
+    }, ANNOUNCE_MS);
 
     if (snapshot) applySnapshot(snapshot); // supaya pemenang tersorot di daftar
   }
@@ -307,6 +385,7 @@
   announce.addEventListener('click', function () {
     global.clearTimeout(announceTimer);
     announce.hidden = true;
+    pauseRoll(false);
   });
 
   /* ---------- Sumber 1: tab lain di browser yang sama ---------- */
@@ -384,11 +463,25 @@
         });
     }
 
+    var firstLoad = true;
+
     function handleSession(session, serverNow) {
       applySnapshot(normalize(session));
       if (animating === 0 && announce.hidden) setStatus('live', 'Terhubung');
 
       var events = session.events || {};
+
+      /* Layar yang baru dibuka tidak mengulang peristiwa lama — penonton yang
+         baru bergabung tidak perlu melihat pengumuman undian yang sudah lewat,
+         cukup keadaan terkini. */
+      if (firstLoad) {
+        firstLoad = false;
+        ['0', '1'].forEach(function (key) {
+          if (events[key] && events[key].seq) seenSeq[key] = events[key].seq;
+        });
+        return;
+      }
+
       ['0', '1'].forEach(function (key) {
         var event = events[key];
         if (!event || !(event.seq > seenSeq[key])) return;
@@ -428,7 +521,10 @@
   global.addEventListener('resize', function () {
     global.clearTimeout(resizeTimer);
     resizeTimer = global.setTimeout(function () {
-      boards.forEach(function (board) { board.wheel.resize(); });
+      boards.forEach(function (board) {
+        board.wheel.resize();
+        setupRoll(board);
+      });
     }, 150);
   });
 

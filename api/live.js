@@ -159,7 +159,7 @@ function sanitizeSession(input, id) {
       name: String(wheel.name || 'Roda ' + (index + 1)).trim().slice(0, 40) || 'Roda ' + (index + 1),
       items: items.map(function (item) {
         var label = cleanLabel(item && item.label);
-        return label ? { label: label, blocked: !!(item && item.blocked) } : null;
+        return label ? { label: label, blocked: !!(item && item.blocked), won: !!(item && item.won) } : null;
       }).filter(Boolean).slice(0, MAX_NAMES),
       history: (Array.isArray(wheel.history) ? wheel.history : []).slice(0, 12).map(function (row) {
         var label = cleanLabel(row && row.label);

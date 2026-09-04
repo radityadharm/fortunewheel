@@ -35,9 +35,9 @@
     if (Array.isArray(raw.items)) {
       data.items = raw.items
         .map(function (item) {
-          if (typeof item === 'string') return { id: uid(), label: item, blocked: false };
+          if (typeof item === 'string') return { id: uid(), label: item, blocked: false, won: false };
           if (item && typeof item.label === 'string') {
-            return { id: item.id || uid(), label: item.label, blocked: !!item.blocked };
+            return { id: item.id || uid(), label: item.label, blocked: !!item.blocked, won: !!item.won };
           }
           return null;
         })
@@ -115,7 +115,7 @@
         return {
           name: wheel.name,
           items: wheel.items.map(function (item) {
-            return { label: item.label, blocked: !!item.blocked };
+            return { label: item.label, blocked: !!item.blocked, won: !!item.won };
           }),
           history: wheel.history.slice(0, 12)
         };
@@ -197,7 +197,7 @@
       if (seen[key]) { skipped++; return; }
       if (data.items.length >= MAX_NAMES) { full = true; return; }
       seen[key] = true;
-      data.items.push({ id: uid(), label: name, blocked: false });
+      data.items.push({ id: uid(), label: name, blocked: false, won: false });
       added++;
     });
 
@@ -246,6 +246,9 @@
       bulkAdd: pick('bulk-add'),
       bulkReplace: pick('bulk-replace'),
       afterWin: pick('after-win'),
+      searchBox: pick('search-box'),
+      search: pick('search'),
+      searchCount: pick('search-count'),
       blockedNote: pick('blocked-note'),
       blockedText: pick('blocked-text'),
       unblockAll: pick('unblock-all'),
@@ -354,6 +357,9 @@
       openDrawer(index);
     });
 
+    el.search.addEventListener('input', function () { applySearch(ctrl); });
+    el.search.addEventListener('search', function () { applySearch(ctrl); });
+
     el.unblockAll.addEventListener('click', function () {
       if (wheel.spinning) return;
       var count = data.items.length - eligibleCount(data);
@@ -367,6 +373,7 @@
 
     el.clearHistory.addEventListener('click', function () {
       data.history = [];
+      data.items.forEach(function (item) { item.won = false; }); // mahkotanya ikut hilang
       renderPanel(ctrl);
       persistState();
     });
@@ -436,6 +443,27 @@
     ctrl.lastWinner = null;
   }
 
+  /* Menyaring chip yang sudah ada, bukan membangun ulang daftarnya — dengan
+     200 peserta, mengetik di kolom cari harus tetap ringan. */
+  function applySearch(ctrl) {
+    var query = (ctrl.el.search.value || '').trim().toLowerCase();
+    var nodes = ctrl.el.list.children;
+    var shown = 0;
+
+    for (var i = 0; i < nodes.length; i++) {
+      var label = nodes[i].getAttribute('data-label') || '';
+      var match = !query || label.indexOf(query) >= 0;
+      nodes[i].hidden = !match;
+      if (match) shown++;
+    }
+
+    ctrl.el.searchCount.textContent = query
+      ? shown + ' dari ' + nodes.length
+      : '';
+    ctrl.el.searchCount.hidden = !query;
+    ctrl.el.list.setAttribute('data-empty-search', query && !shown ? 'true' : 'false');
+  }
+
   function reportAdd(result) {
     if (result.full) {
       toast('Roda penuh, maksimal ' + MAX_NAMES + ' nama.');
@@ -479,7 +507,7 @@
        dengan 200 peserta, membangun ratusan elemen tiap render terasa tersendat
        tepat saat roda berhenti. */
     var listKey = total + ':' + data.items.map(function (item) {
-      return item.id + (item.blocked ? '!' : '');
+      return item.id + (item.blocked ? '!' : '') + (item.won ? '*' : '');
     }).join(',');
 
     if (ctrl.listKey !== listKey) {
@@ -526,9 +554,21 @@
           classes.push('is-blocked');
           dot.style.background = '#39405e';
         }
+        if (item.won) classes.push('is-won');
+
         li.className = classes.join(' ');
+        li.setAttribute('data-label', item.label.toLowerCase());
 
         li.appendChild(dot);
+
+        if (item.won) {
+          var crown = document.createElement('i');
+          crown.className = 'crown';
+          crown.title = 'Sudah pernah menang';
+          crown.textContent = '👑';
+          li.appendChild(crown);
+        }
+
         li.appendChild(label);
         li.appendChild(block);
         li.appendChild(remove);
@@ -536,6 +576,13 @@
       });
 
       ctrl.shownIds = shownNow;
+      applySearch(ctrl);
+    }
+
+    el.searchBox.hidden = total < 10;
+    if (total < 10 && el.search.value) {
+      el.search.value = '';
+      applySearch(ctrl);
     }
 
     /* riwayat */
@@ -594,6 +641,7 @@
       ctrl.data.history.unshift({ label: item.label, at: Date.now() });
       ctrl.data.history = ctrl.data.history.slice(0, 100);
 
+      item.won = true; // mahkota di daftar peserta, terpisah dari status "tidak diundi"
       var entry = { ctrl: ctrl, item: item, removed: false, blocked: item.blocked };
 
       if (ctrl.data.afterWin === 'remove') {
@@ -746,7 +794,7 @@
     var data = entry.ctrl.data;
 
     if (entry.removed) {
-      data.items.push({ id: entry.item.id, label: entry.item.label, blocked: entry.blocked });
+      data.items.push({ id: entry.item.id, label: entry.item.label, blocked: entry.blocked, won: !!entry.item.won });
       entry.removed = false;
       toast('"' + entry.item.label + '" dikembalikan ke roda.');
     } else {
@@ -1399,7 +1447,7 @@
       (entry.blocked || []).forEach(function (label) { blockedNames[label.toLowerCase()] = true; });
 
       ctrl.data.items = entry.names.slice(0, MAX_NAMES).map(function (label) {
-        return { id: uid(), label: label, blocked: !!blockedNames[label.toLowerCase()] };
+        return { id: uid(), label: label, blocked: !!blockedNames[label.toLowerCase()], won: false };
       });
       ctrl.data.history = [];
       forgetWinner(ctrl);

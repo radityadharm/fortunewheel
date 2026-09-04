@@ -14,12 +14,14 @@ Situs statis murni — tanpa framework, tanpa dependency, tanpa proses build.
 | **Tahan untuk berputar** | Tahan tombol **PUTAR** (mouse, sentuh, atau <kbd>Spasi</kbd>) — roda berputar terus selama ditahan. Begitu dilepas, barulah pemenang diundi dan rodanya direm sampai berhenti di segmen itu. Klik singkat tetap menghasilkan putaran biasa. |
 | **Confetti** | Ledakan confetti + suara singkat tiap kali pemenang keluar. Di mode dua roda, confetti dikurung di kolom rodanya masing-masing sehingga perayaan roda kiri dan kanan terpisah. |
 | **Hapus pemenang** | Tombol *Hapus dari roda* di kartu pemenang agar tidak menang dua kali — lengkap dengan tombol *Kembalikan* kalau salah pencet. |
-| **Tampil tapi tidak diundi** | Untuk peserta yang sudah sering menang: namanya **tetap tampil di roda** (segmen abu-abu bergaris) tapi tidak akan pernah terpilih. Atur lewat tombol ⊘ di daftar nama atau tombol *Tidak ikut lagi* di kartu pemenang. Bisa dibatalkan satu per satu, atau sekaligus lewat **ikutkan semua lagi**. |
+| **Tampil tapi tidak diundi** | Untuk peserta yang sudah sering menang: namanya **tetap tampil di roda** tapi tidak akan pernah terpilih. Atur lewat tombol ⊘ di daftar nama atau tombol *Tidak ikut lagi* di kartu pemenang. Bisa dibatalkan satu per satu, atau sekaligus lewat **ikutkan semua lagi**. Penandaannya (abu-abu, dicoret) **hanya muncul di halaman moderasi** — di layar peserta orangnya tampil sama rata dengan yang lain. |
+| **Mahkota pemenang** | Peserta yang sudah pernah menang diberi 👑 di kedua halaman. Inilah yang membedakan "dicantumkan tapi tidak diundi" dari "sudah dapat hadiah". Mahkotanya hilang kalau riwayat pemenang dibersihkan. |
+| **Cari peserta** | Kolom pencarian muncul di daftar begitu ada 10 nama atau lebih, lengkap dengan penghitung hasil. |
 | **Setelah menang** | Satu pilihan per roda: pemenang *tetap di roda*, *hapus dari roda*, atau *tidak ikut lagi* secara otomatis. |
 | **Roda tersimpan** | Simpan daftar nama dengan sebuah nama roda, lalu muat lagi kapan saja — status *tidak diundi* ikut tersimpan. Bisa ditimpa, diduplikat, dihapus, diekspor/impor JSON. |
 | **Database (opsional)** | Kalau Upstash Redis dipasang di Vercel, roda tersimpan naik ke database sehingga bisa dibuka dari perangkat lain dan tidak hilang saat data browser dibersihkan. Membaca terbuka; menyimpan/menghapus perlu **kode admin**. Tanpa database, aplikasi tetap jalan penuh dengan penyimpanan browser. |
 | **Dua roda** | Ganti ke mode *2 Roda* untuk menjalankan roda kedua dengan isi berbeda (mis. peserta × hadiah). Bisa diputar sendiri-sendiri atau bareng lewat **Putar semua**. Kartu hasil selalu menampilkan pemenang terakhir dari **kedua** roda — memutar roda 2 tidak menghapus pemenang roda 1 — dan yang baru saja diundi diberi tanda *baru saja*. |
-| **Layar peserta** | Halaman `slide.html` untuk diproyeksikan ke layar besar: **rodanya ikut berputar** mengikuti moderator, daftar peserta berukuran besar, pengumuman pemenang layar penuh dengan confetti, dan daftar pemenang sejauh ini. Bisa dibuka di tab lain pada browser yang sama, atau **di perangkat lain lewat tautan peserta** kalau database aktif. Dengan dua roda, papannya ditumpuk atas–bawah dan confetti tiap roda tinggal di pitanya sendiri. |
+| **Layar peserta** | Halaman `slide.html` untuk diproyeksikan ke layar besar: **rodanya ikut berputar** mengikuti moderator, daftar peserta berukuran besar yang **bergulir sendiri** kalau namanya tidak muat, pengumuman pemenang layar penuh dengan confetti, dan daftar pemenang sejauh ini. Bisa dibuka di tab lain pada browser yang sama, atau **di perangkat lain lewat tautan peserta** kalau database aktif. Dengan dua roda, papannya ditumpuk atas–bawah dan confetti tiap roda tinggal di pitanya sendiri. |
 | **Riwayat** | Daftar pemenang per roda beserta jamnya. |
 | **Tersimpan otomatis** | Semua isi roda, mode, dan pengaturan disimpan di `localStorage` browser. |
 
@@ -198,6 +200,13 @@ benar-benar berhenti tepat di bawah jarum. Jadi yang terlihat di layar selalu
 sama dengan yang diumumkan, dan nama bertanda *tidak diundi* memang tidak
 pernah bisa berhenti di jarum. Saat tombolnya ditahan, undiannya baru dilakukan
 pada detik tombol dilepas.
+
+Daftar nama di layar peserta digulung dengan menggandakan isinya lalu
+menggesernya setengah tinggi — perulangannya jadi mulus tanpa lompatan. Layar
+itu juga hanya membangun ulang daftarnya kalau isinya benar-benar berubah;
+kalau tidak, animasi gulungannya akan mengulang dari awal tiap kali data
+ditarik. Penonton yang baru membuka tautan langsung melihat keadaan terkini
+tanpa mengulang pengumuman undian yang sudah lewat.
 
 Roda digambar sekali ke canvas bayangan, lalu tiap frame cukup diputar dan
 disalin — bukan menggambar ulang ratusan juring beserta teksnya. Dengan 200
