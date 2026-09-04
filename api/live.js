@@ -98,13 +98,29 @@ function cleanLabel(value) {
 
 function sanitizeEvent(input) {
   if (!input || typeof input !== 'object') return null;
-  if (input.type !== 'spin' && input.type !== 'winner') return null;
+  if (input.type !== 'spin' && input.type !== 'winner' && input.type !== 'hold') return null;
 
   var event = {
     type: input.type,
     seq: Math.max(0, Math.floor(Number(input.seq) || 0)),
     wheel: Number(input.wheel) === 1 ? 1 : 0
   };
+
+  if (input.type === 'hold') {
+    var hold = input.hold || {};
+    var holdFrom = Number(hold.from);
+    var speed = Number(hold.speed);
+    var accelMs = Number(hold.accelMs);
+    if (!isFinite(holdFrom) || !isFinite(speed) || speed <= 0) return null;
+
+    event.hold = {
+      from: holdFrom,
+      speed: Math.min(0.1, speed),
+      accelMs: isFinite(accelMs) ? Math.min(5000, Math.max(0, accelMs)) : 700
+    };
+    event.startedAt = Date.now(); // stempel jam server
+    return event;
+  }
 
   if (input.type === 'spin') {
     var plan = input.plan || {};

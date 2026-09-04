@@ -174,9 +174,11 @@
 
   /* ---------- Utilitas nama ---------- */
 
+  /* Pemisahnya hanya baris baru. Koma sengaja tidak dipakai karena banyak nama
+     memerlukannya untuk gelar, mis. "Andi Wijaya, S.Kom., M.T.". */
   function parseNames(text) {
     return String(text || '')
-      .split(/[\n,;\t]+/)
+      .split(/\r?\n/)
       .map(function (part) { return part.trim().replace(/\s+/g, ' '); })
       .filter(function (part) { return part.length > 0; })
       .map(function (part) { return part.slice(0, 60); });
@@ -369,8 +371,34 @@
       persistState();
     });
 
-    /* -- putar -- */
-    el.spin.addEventListener('click', function () { spin(ctrl); });
+    /* -- putar: tahan untuk berputar terus, lepas untuk mulai berhenti -- */
+    el.spin.addEventListener('pointerdown', function (event) {
+      if (event.button != null && event.button !== 0) return;
+      if (el.spin.disabled) return;
+      try { el.spin.setPointerCapture(event.pointerId); } catch (err) { /* tidak semua peramban perlu ini */ }
+      beginHold(ctrl);
+    });
+
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (name) {
+      el.spin.addEventListener(name, function () { endHold(ctrl); });
+    });
+
+    el.spin.addEventListener('contextmenu', function (event) { event.preventDefault(); });
+
+    el.spin.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ' && event.code !== 'Space') return;
+      event.preventDefault();
+      if (event.repeat) return;
+      beginHold(ctrl);
+    });
+
+    el.spin.addEventListener('keyup', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ' && event.code !== 'Space') return;
+      event.preventDefault();
+      endHold(ctrl);
+    });
+
+    el.spin.addEventListener('blur', function () { endHold(ctrl); });
 
     /* -- hapus nama dari daftar -- */
     el.list.addEventListener('click', function (event) {
@@ -447,58 +475,68 @@
         : blocked + ' nama tetap tampil di roda tapi tidak akan menang.';
     }
 
-    /* daftar nama */
-    var shownBefore = ctrl.shownIds || {};
-    var shownNow = {};
+    /* Daftar nama hanya dibangun ulang kalau isinya benar-benar berubah —
+       dengan 200 peserta, membangun ratusan elemen tiap render terasa tersendat
+       tepat saat roda berhenti. */
+    var listKey = total + ':' + data.items.map(function (item) {
+      return item.id + (item.blocked ? '!' : '');
+    }).join(',');
 
-    el.list.textContent = '';
-    data.items.forEach(function (item, i) {
-      var li = document.createElement('li');
-      var classes = [];
-      if (!shownBefore[item.id]) classes.push('is-new');
-      shownNow[item.id] = true;
+    if (ctrl.listKey !== listKey) {
+      ctrl.listKey = listKey;
 
-      var dot = document.createElement('i');
-      dot.className = 'swatch';
-      dot.style.background = FWWheel.colorFor(i, total);
+      var shownBefore = ctrl.shownIds || {};
+      var shownNow = {};
 
-      var label = document.createElement('span');
-      label.textContent = item.label;
+      el.list.textContent = '';
+      data.items.forEach(function (item, i) {
+        var li = document.createElement('li');
+        var classes = [];
+        if (!shownBefore[item.id]) classes.push('is-new');
+        shownNow[item.id] = true;
 
-      var block = document.createElement('button');
-      block.type = 'button';
-      block.className = 'chipbtn' + (item.blocked ? ' is-on' : '');
-      block.setAttribute('data-id', item.id);
-      block.setAttribute('data-action', 'block');
-      block.title = item.blocked
-        ? 'Ikutkan lagi dalam undian'
-        : 'Tetap tampil di roda, tapi tidak bisa menang';
-      block.setAttribute('aria-label', block.title);
-      block.setAttribute('aria-pressed', String(!!item.blocked));
-      block.textContent = '⊘';
+        var dot = document.createElement('i');
+        dot.className = 'swatch';
+        dot.style.background = FWWheel.colorFor(i, total);
 
-      var remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'chipbtn';
-      remove.setAttribute('data-id', item.id);
-      remove.setAttribute('data-action', 'remove');
-      remove.setAttribute('aria-label', 'Hapus ' + item.label);
-      remove.textContent = '×';
+        var label = document.createElement('span');
+        label.textContent = item.label;
 
-      if (item.blocked) {
-        classes.push('is-blocked');
-        dot.style.background = '#39405e';
-      }
-      li.className = classes.join(' ');
+        var block = document.createElement('button');
+        block.type = 'button';
+        block.className = 'chipbtn' + (item.blocked ? ' is-on' : '');
+        block.setAttribute('data-id', item.id);
+        block.setAttribute('data-action', 'block');
+        block.title = item.blocked
+          ? 'Ikutkan lagi dalam undian'
+          : 'Tetap tampil di roda, tapi tidak bisa menang';
+        block.setAttribute('aria-label', block.title);
+        block.setAttribute('aria-pressed', String(!!item.blocked));
+        block.textContent = '⊘';
 
-      li.appendChild(dot);
-      li.appendChild(label);
-      li.appendChild(block);
-      li.appendChild(remove);
-      el.list.appendChild(li);
-    });
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'chipbtn';
+        remove.setAttribute('data-id', item.id);
+        remove.setAttribute('data-action', 'remove');
+        remove.setAttribute('aria-label', 'Hapus ' + item.label);
+        remove.textContent = '×';
 
-    ctrl.shownIds = shownNow;
+        if (item.blocked) {
+          classes.push('is-blocked');
+          dot.style.background = '#39405e';
+        }
+        li.className = classes.join(' ');
+
+        li.appendChild(dot);
+        li.appendChild(label);
+        li.appendChild(block);
+        li.appendChild(remove);
+        el.list.appendChild(li);
+      });
+
+      ctrl.shownIds = shownNow;
+    }
 
     /* riwayat */
     el.historyBox.hidden = data.history.length === 0;
@@ -527,14 +565,9 @@
 
   /* ---------- Putar & pemenang ---------- */
 
-  /* Memutar satu roda dan mencatat hasilnya. Modal & confetti diurus pemanggil,
-     supaya "Putar semua" bisa menunggu kedua roda selesai dulu. */
-  function runSpin(ctrl) {
-    if (ctrl.wheel.spinning || eligibleCount(ctrl.data) === 0) return Promise.resolve(null);
-
-    var plan = ctrl.wheel.planSpin();
-    if (!plan) return Promise.resolve(null);
-
+  /* Menjalankan sebuah rencana putaran lalu mencatat hasilnya. Modal & confetti
+     diurus pemanggil, supaya "Putar semua" bisa menunggu kedua roda selesai. */
+  function launchSpin(ctrl, plan) {
     ctrl.el.spin.disabled = true;
     ctrl.el.spin.classList.add('is-spinning');
     ctrl.el.spinText.textContent = '...';
@@ -584,6 +617,15 @@
     });
   }
 
+  function runSpin(ctrl) {
+    if (ctrl.wheel.spinning || eligibleCount(ctrl.data) === 0) return Promise.resolve(null);
+
+    var plan = ctrl.wheel.planSpin();
+    if (!plan) return Promise.resolve(null);
+
+    return launchSpin(ctrl, plan);
+  }
+
   /* Pemenang terakhir dari tiap roda yang sedang aktif, urut roda 1 lalu roda 2. */
   function activeWinners() {
     return controllers.slice(0, state.mode)
@@ -597,6 +639,13 @@
     FWConfetti.burstFrom(ctrl.el.stage, amount, state.mode === 2 ? ctrl.el.root : null);
   }
 
+  function announceResult(result) {
+    if (!result) return;
+    FWSound.win();
+    celebrate(result.ctrl, 150);
+    showWinners(activeWinners(), result);
+  }
+
   function spin(ctrl) {
     if (ctrl.wheel.spinning || eligibleCount(ctrl.data) === 0) return;
 
@@ -604,12 +653,51 @@
     closeModal();
     FWConfetti.stop();
 
-    runSpin(ctrl).then(function (result) {
-      if (!result) return;
-      FWSound.win();
-      celebrate(result.ctrl, 150);
-      showWinners(activeWinners(), result);
+    runSpin(ctrl).then(announceResult);
+  }
+
+  /* ---------- Tahan untuk terus berputar ----------
+     Tombol ditahan: roda berputar terus tanpa batas. Begitu dilepas, barulah
+     pemenang diundi dan rodanya direm sampai berhenti di segmen itu. */
+
+  function beginHold(ctrl) {
+    if (ctrl.holding || ctrl.wheel.spinning || eligibleCount(ctrl.data) === 0) return;
+
+    setActive(ctrl.index);
+    closeModal();
+    FWConfetti.stop();
+
+    var config = ctrl.wheel.startFreeSpin();
+    if (!config) return;
+
+    ctrl.holding = true;
+    ctrl.el.spin.classList.add('is-spinning');
+    ctrl.el.spinText.textContent = 'LEPAS';
+
+    FWSync.publish('holding', {
+      wheel: ctrl.index,
+      wheelName: ctrl.data.name,
+      hold: config,
+      startedAt: Date.now()
     });
+    noteLiveEvent(ctrl.index, { type: 'hold', hold: config });
+  }
+
+  function endHold(ctrl) {
+    if (!ctrl.holding) return;
+    ctrl.holding = false;
+
+    var plan = ctrl.wheel.planLanding();
+
+    if (!plan) {
+      ctrl.wheel.free = null;
+      ctrl.wheel.spinning = false;
+      ctrl.el.spin.classList.remove('is-spinning');
+      ctrl.el.spinText.textContent = 'PUTAR';
+      return;
+    }
+
+    launchSpin(ctrl, plan).then(announceResult);
   }
 
   function spinAll() {
@@ -1427,14 +1515,32 @@
       return;
     }
 
-    if (event.code !== 'Space' || event.repeat) return;
+    if (event.code !== 'Space') return;
 
     var tag = (event.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || event.target.isContentEditable) return;
+    if (event.target.closest && event.target.closest('[data-role="spin"]')) return; // tombolnya punya penanganan sendiri
     if (!modal.hidden || !drawer.hidden) return;
 
     event.preventDefault();
-    spin(controllers[Math.min(activeIndex, state.mode - 1)]);
+    if (event.repeat) return;
+    beginHold(controllers[Math.min(activeIndex, state.mode - 1)]);
+  });
+
+  document.addEventListener('keyup', function (event) {
+    if (event.code !== 'Space') return;
+    if (event.target.closest && event.target.closest('[data-role="spin"]')) return;
+    endHold(controllers[Math.min(activeIndex, state.mode - 1)]);
+  });
+
+  /* Jaring pengaman: kalau jari/kursor dilepas di luar tombol atau tabnya
+     berpindah, tahanan tetap dilepas supaya roda tidak berputar selamanya. */
+  document.addEventListener('pointerup', function () {
+    controllers.forEach(function (ctrl) { endHold(ctrl); });
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) controllers.forEach(function (ctrl) { endHold(ctrl); });
   });
 
   var resizeTimer = null;

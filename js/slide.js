@@ -128,7 +128,7 @@
 
     /* Jangan mengubah isi roda saat animasinya masih berjalan — nanti
        segmennya bergeser di tengah putaran. */
-    if (animating > 0) {
+    if (busy()) {
       pendingSnapshot = next;
       return;
     }
@@ -188,8 +188,16 @@
     hintEl.hidden = true;
   }
 
+  function busy() {
+    if (animating > 0) return true;
+    for (var i = 0; i < boards.length; i++) {
+      if (boards[i].wheel.isFreeSpinning()) return true;
+    }
+    return false;
+  }
+
   function flushPending() {
-    if (animating > 0 || !pendingSnapshot) return;
+    if (busy() || !pendingSnapshot) return;
     var next = pendingSnapshot;
     pendingSnapshot = null;
     applySnapshot(next);
@@ -242,6 +250,24 @@
     });
   }
 
+  /* Moderator sedang menahan tombolnya: roda di sini ikut berputar terus,
+     memakai rumus dan waktu mulai yang sama supaya posisinya sejalan. */
+  function holdBoard(index, hold, elapsed) {
+    var board = boards[index];
+    if (!board || !hold) return;
+
+    announce.hidden = true;
+    highlight = {};
+    board.wheel.startFreeSpin({
+      from: hold.from,
+      speed: hold.speed,
+      accelMs: hold.accelMs,
+      elapsed: elapsed
+    });
+
+    setStatus('spinning', 'Sedang mengundi' + (snapshot ? ' — ' + snapshot.wheels[index].name : '') + '…');
+  }
+
   function announceWinner(index, label) {
     highlight[String(index)] = label;
 
@@ -271,7 +297,7 @@
 
   /* Menunggu animasi selesai dulu kalau pengumumannya menyusul terlalu cepat. */
   function queueWinner(index, label) {
-    if (animating > 0) {
+    if (busy()) {
       global.setTimeout(function () { queueWinner(index, label); }, 200);
       return;
     }
@@ -298,6 +324,16 @@
 
     FWSync.subscribe(function (message) {
       if (message.type === 'state') { readLocal(); return; }
+
+      if (message.type === 'holding') {
+        readLocal();
+        holdBoard(
+          Number(message.wheel) || 0,
+          message.hold,
+          message.startedAt ? Date.now() - message.startedAt : 0
+        );
+        return;
+      }
 
       if (message.type === 'spinning') {
         readLocal();
@@ -359,7 +395,9 @@
         seenSeq[key] = event.seq;
 
         var index = Number(key);
-        if (event.type === 'spin' && event.plan) {
+        if (event.type === 'hold' && event.hold) {
+          holdBoard(index, event.hold, Math.max(0, serverNow - (event.startedAt || serverNow)));
+        } else if (event.type === 'spin' && event.plan) {
           var elapsed = Math.max(0, serverNow - (event.startedAt || serverNow));
           spinBoard(index, event.plan, elapsed);
         } else if (event.type === 'winner') {

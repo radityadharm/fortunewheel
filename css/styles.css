@@ -262,6 +262,9 @@ a.btn { text-decoration: none; }
   letter-spacing: 0.08em;
   cursor: pointer;
   z-index: 3;
+  touch-action: none;          /* menahan tombol tidak ikut menggeser halaman */
+  -webkit-user-select: none;
+  user-select: none;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   transition: transform 0.12s, box-shadow 0.2s;
 }

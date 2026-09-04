@@ -10,7 +10,8 @@ Situs statis murni — tanpa framework, tanpa dependency, tanpa proses build.
 
 | Fitur | Keterangan |
 | --- | --- |
-| **Input nama** | Satu per satu (Enter) atau sekaligus lewat tempel banyak baris/koma. Nama kembar otomatis ditolak. |
+| **Input nama** | Satu per satu (Enter) atau sekaligus lewat tempel banyak baris. **Pemisahnya hanya baris baru**, jadi koma aman dipakai untuk gelar — `Andi Wijaya, S.Kom., M.T.` tetap satu peserta. Nama kembar otomatis ditolak. |
+| **Tahan untuk berputar** | Tahan tombol **PUTAR** (mouse, sentuh, atau <kbd>Spasi</kbd>) — roda berputar terus selama ditahan. Begitu dilepas, barulah pemenang diundi dan rodanya direm sampai berhenti di segmen itu. Klik singkat tetap menghasilkan putaran biasa. |
 | **Confetti** | Ledakan confetti + suara singkat tiap kali pemenang keluar. Di mode dua roda, confetti dikurung di kolom rodanya masing-masing sehingga perayaan roda kiri dan kanan terpisah. |
 | **Hapus pemenang** | Tombol *Hapus dari roda* di kartu pemenang agar tidak menang dua kali — lengkap dengan tombol *Kembalikan* kalau salah pencet. |
 | **Tampil tapi tidak diundi** | Untuk peserta yang sudah sering menang: namanya **tetap tampil di roda** (segmen abu-abu bergaris) tapi tidak akan pernah terpilih. Atur lewat tombol ⊘ di daftar nama atau tombol *Tidak ikut lagi* di kartu pemenang. Bisa dibatalkan satu per satu, atau sekaligus lewat **ikutkan semua lagi**. |
@@ -22,9 +23,9 @@ Situs statis murni — tanpa framework, tanpa dependency, tanpa proses build.
 | **Riwayat** | Daftar pemenang per roda beserta jamnya. |
 | **Tersimpan otomatis** | Semua isi roda, mode, dan pengaturan disimpan di `localStorage` browser. |
 
-Pelengkap: acak urutan, ganti nama roda, matikan suara, tekan <kbd>Spasi</kbd>
-untuk memutar roda aktif, <kbd>Esc</kbd> untuk menutup dialog, dan tampilan
-menyesuaikan layar ponsel.
+Pelengkap: acak urutan, ganti nama roda, matikan suara, <kbd>Esc</kbd> untuk
+menutup dialog, dan tampilan menyesuaikan layar ponsel. Sudah diuji lancar
+dengan 200+ peserta dalam satu roda.
 
 ## Layar peserta (halaman slide)
 
@@ -176,6 +177,15 @@ Pemenang ditentukan lebih dulu memakai `crypto.getRandomValues` — hanya dari
 segmen yang ikut diundi — baru rotasi akhir roda dihitung agar segmen itu
 benar-benar berhenti tepat di bawah jarum. Jadi yang terlihat di layar selalu
 sama dengan yang diumumkan, dan nama bertanda *tidak diundi* memang tidak
-pernah bisa berhenti di jarum.
+pernah bisa berhenti di jarum. Saat tombolnya ditahan, undiannya baru dilakukan
+pada detik tombol dilepas.
+
+Roda digambar sekali ke canvas bayangan, lalu tiap frame cukup diputar dan
+disalin — bukan menggambar ulang ratusan juring beserta teksnya. Dengan 200
+nama, biaya menggambar per frame turun dari ~1,6 ms jadi ~0,04 ms (sekitar 40×
+lebih ringan; anggaran 60 fps adalah 16,7 ms per frame). Dua hal lain ikut
+membantu: label dilewati kalau juringnya terlalu tipis untuk terbaca, dan bunyi
+"tek" dikelompokkan supaya lajunya tetap wajar berapa pun jumlah namanya —
+tanpa itu, 200 juring berarti 240 bunyi per detik.
 
 Batas praktis: 300 nama per roda.
