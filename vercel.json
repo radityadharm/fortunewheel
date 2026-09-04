@@ -2,10 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": null,
-  "installCommand": null,
   "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/api/(.*)\\.js", "destination": "/", "permanent": false }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -18,6 +20,12 @@
       "source": "/(.*)\\.(html|css|js)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
       ]
     }
   ]

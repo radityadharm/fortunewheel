@@ -624,9 +624,9 @@
         name.textContent = entry.item.label;
         who.appendChild(source);
         who.appendChild(name);
-        if (entry.blocked && !entry.removed) {
+        if (entry.removed || entry.blocked) {
           var tag = document.createElement('em');
-          tag.textContent = 'tidak ikut undian lagi';
+          tag.textContent = entry.removed ? 'sudah dihapus dari roda' : 'tidak ikut undian lagi';
           who.appendChild(tag);
         }
 
@@ -751,6 +751,17 @@
   var saveSource = $('#save-source');
   var saveName = $('#save-name');
 
+  var cloudBox = {
+    dot: $('#cloud-dot'),
+    status: $('#cloud-status'),
+    note: $('#cloud-note'),
+    form: $('#cloud-form'),
+    code: $('#admin-code'),
+    logout: $('#cloud-logout')
+  };
+
+  var cloudWheels = [];
+
   function openDrawer(sourceIndex) {
     drawer.hidden = false;
     renderSaveSources();
@@ -758,6 +769,7 @@
     var data = state.wheels[Number(saveSource.value) || 0];
     if (!saveName.value.trim()) saveName.value = data.name;
     renderSaved();
+    refreshCloud();
     saveName.focus();
   }
 
@@ -779,24 +791,206 @@
     return new Date(ts).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  function renderSaved() {
-    savedList.textContent = '';
-    savedEmpty.hidden = saved.length > 0;
+  /* ---------- Database ---------- */
 
-    saved.forEach(function (entry) {
+  var CLOUD_ERRORS = {
+    wrong_code: 'Kode admin salah.',
+    no_code: 'Masuk dulu dengan kode admin.',
+    admin_code_not_set: 'Server belum disetel kode adminnya, jadi database masih hanya-baca.',
+    storage_not_configured: 'Database belum tersambung di server.',
+    storage_unavailable: 'Database sedang tidak bisa dihubungi.',
+    too_many_wheels: 'Database sudah penuh.',
+    invalid_wheel: 'Isi roda tidak bisa disimpan (nama kosong atau terlalu panjang).',
+    offline: 'Tidak ada sambungan ke server.'
+  };
+
+  function cloudMessage(result) {
+    if (result.status === 401) {
+      FWCloud.forgetCode();
+      renderCloud();
+      return 'Kode admin ditolak — silakan masuk lagi.';
+    }
+    return CLOUD_ERRORS[result.error] || 'Gagal menghubungi database.';
+  }
+
+  function refreshCloud() {
+    return FWCloud.refresh().then(function (result) {
+      cloudWheels = result.wheels;
+      renderCloud();
+      renderSaved();
+    });
+  }
+
+  function renderCloud() {
+    var dot = cloudBox.dot;
+
+    if (!FWCloud.isEnabled()) {
+      dot.setAttribute('data-state', 'off');
+      cloudBox.status.textContent = 'Tersimpan di browser ini saja';
+      cloudBox.note.textContent = FWCloud.reason() === 'offline'
+        ? 'Server tidak bisa dihubungi. Roda tetap aman tersimpan di browser ini.'
+        : 'Database belum aktif. Pasang Upstash Redis di Vercel lalu isi env ADMIN_CODE agar roda bisa dipakai lintas perangkat.';
+      cloudBox.form.hidden = true;
+      cloudBox.logout.hidden = true;
+      return;
+    }
+
+    if (!FWCloud.canWrite()) {
+      dot.setAttribute('data-state', 'on');
+      cloudBox.status.textContent = 'Database tersambung (hanya baca)';
+      cloudBox.note.textContent = 'Env ADMIN_CODE belum disetel di server, jadi belum ada yang boleh menyimpan atau menghapus.';
+      cloudBox.form.hidden = true;
+      cloudBox.logout.hidden = true;
+      return;
+    }
+
+    if (FWCloud.isAdmin()) {
+      dot.setAttribute('data-state', 'admin');
+      cloudBox.status.textContent = 'Masuk sebagai admin';
+      cloudBox.note.textContent = 'Roda yang kamu simpan masuk ke database dan bisa dibuka dari perangkat lain.';
+      cloudBox.form.hidden = true;
+      cloudBox.logout.hidden = false;
+      return;
+    }
+
+    dot.setAttribute('data-state', 'on');
+    cloudBox.status.textContent = 'Database tersambung';
+    cloudBox.note.textContent = 'Roda di database bisa dimuat siapa saja. Masukkan kode admin untuk menyimpan, menimpa, atau menghapus.';
+    cloudBox.form.hidden = false;
+    cloudBox.logout.hidden = true;
+  }
+
+  cloudBox.form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var code = cloudBox.code.value.trim();
+    if (!code) return;
+
+    FWCloud.verify(code).then(function (result) {
+      cloudBox.code.value = '';
+      if (!result.ok) {
+        /* Saat memverifikasi, 401 berarti kodenya memang salah — bukan sesi
+           admin yang kedaluwarsa seperti pada penyimpanan. */
+        toast(result.status === 401 ? 'Kode admin salah.' : cloudMessage(result));
+        return;
+      }
+      toast('Berhasil masuk sebagai admin.');
+      refreshCloud();
+    });
+  });
+
+  cloudBox.logout.addEventListener('click', function () {
+    FWCloud.forgetCode();
+    renderCloud();
+    renderSaved();
+    toast('Keluar dari mode admin.');
+  });
+
+  function canPush() {
+    return FWCloud.canWrite() && FWCloud.isAdmin();
+  }
+
+  function pushToCloud(wheel, message) {
+    if (!canPush()) return Promise.resolve(false);
+    return FWCloud.save(wheel).then(function (result) {
+      if (!result.ok) { toast(cloudMessage(result)); return false; }
+
+      var found = false;
+      cloudWheels = cloudWheels.map(function (row) {
+        if (row.id === result.wheel.id) { found = true; return result.wheel; }
+        return row;
+      });
+      if (!found) cloudWheels.unshift(result.wheel);
+
+      renderSaved();
+      if (message) toast(message);
+      return true;
+    });
+  }
+
+  /* ---------- Daftar gabungan (browser + database) ---------- */
+
+  function mergedSaved() {
+    var map = {};
+    var order = [];
+
+    saved.forEach(function (row) {
+      map[row.id] = { data: row, source: 'local' };
+      order.push(row.id);
+    });
+
+    cloudWheels.forEach(function (row) {
+      var existing = map[row.id];
+      if (existing) {
+        var newer = (row.updatedAt || 0) >= (existing.data.updatedAt || 0) ? row : existing.data;
+        map[row.id] = { data: newer, source: 'both' };
+      } else {
+        map[row.id] = { data: row, source: 'cloud' };
+        order.push(row.id);
+      }
+    });
+
+    return order.map(function (id) { return map[id]; }).sort(function (a, b) {
+      return (b.data.updatedAt || 0) - (a.data.updatedAt || 0);
+    });
+  }
+
+  function upsertLocal(wheel) {
+    var found = false;
+    saved = saved.map(function (row) {
+      if (row.id === wheel.id) { found = true; return wheel; }
+      return row;
+    });
+    if (!found) saved.unshift(wheel);
+    persistSaved();
+  }
+
+  function findSavedByName(name) {
+    var key = name.toLowerCase();
+    return mergedSaved().filter(function (row) { return row.data.name.toLowerCase() === key; })[0];
+  }
+
+  function wheelFrom(source, id, name, createdAt) {
+    return {
+      id: id || uid(),
+      name: name,
+      names: source.items.map(function (item) { return item.label; }),
+      blocked: blockedListOf(source),
+      createdAt: createdAt || Date.now(),
+      updatedAt: Date.now()
+    };
+  }
+
+  function renderSaved() {
+    var rows = mergedSaved();
+
+    savedList.textContent = '';
+    savedEmpty.hidden = rows.length > 0;
+
+    rows.forEach(function (row) {
+      var entry = row.data;
+      var inCloud = row.source !== 'local';
       var li = document.createElement('li');
 
       var head = document.createElement('div');
       head.className = 'saved__title';
+
       var name = document.createElement('b');
       name.textContent = entry.name;
+
+      var badge = document.createElement('span');
+      badge.className = 'saved__badge';
+      badge.setAttribute('data-source', row.source);
+      badge.textContent = inCloud ? '☁ database' : 'browser ini';
+
       var meta = document.createElement('span');
       meta.className = 'saved__meta';
       var blockedCount = (entry.blocked || []).length;
       meta.textContent = entry.names.length + ' nama'
         + (blockedCount ? ' · ' + blockedCount + ' tidak diundi' : '')
         + ' · ' + formatDate(entry.updatedAt || entry.createdAt || Date.now());
+
       head.appendChild(name);
+      head.appendChild(badge);
       head.appendChild(meta);
 
       var preview = document.createElement('p');
@@ -815,16 +1009,25 @@
         ));
       }
 
-      actions.appendChild(button('Timpa', 'btn btn--small btn--ghost', function () {
-        var source = state.wheels[Number(saveSource.value) || 0];
-        if (!global.confirm('Timpa "' + entry.name + '" dengan isi ' + source.name + ' (' + source.items.length + ' nama)?')) return;
-        entry.names = source.items.map(function (item) { return item.label; });
-        entry.blocked = blockedListOf(source);
-        entry.updatedAt = Date.now();
-        persistSaved();
-        renderSaved();
-        toast('"' + entry.name + '" diperbarui.');
-      }));
+      if (!inCloud && canPush()) {
+        actions.appendChild(button('Unggah', 'btn btn--small btn--ghost', function () {
+          pushToCloud(entry, '"' + entry.name + '" diunggah ke database.');
+        }));
+      }
+
+      if (!inCloud || canPush()) {
+        actions.appendChild(button('Timpa', 'btn btn--small btn--ghost', function () {
+          var source = state.wheels[Number(saveSource.value) || 0];
+          if (!source.items.length) { toast('Roda sumbernya masih kosong.'); return; }
+          if (!global.confirm('Timpa "' + entry.name + '" dengan isi ' + source.name + ' (' + source.items.length + ' nama)?')) return;
+
+          var updated = wheelFrom(source, entry.id, entry.name, entry.createdAt);
+          upsertLocal(updated);
+          renderSaved();
+          if (inCloud) pushToCloud(updated, '"' + entry.name + '" diperbarui di database.');
+          else toast('"' + entry.name + '" diperbarui.');
+        }));
+      }
 
       actions.appendChild(button('Duplikat', 'btn btn--small btn--ghost', function () {
         saved.unshift({
@@ -839,12 +1042,24 @@
         renderSaved();
       }));
 
-      actions.appendChild(button('Hapus', 'btn btn--small btn--ghost', function () {
-        if (!global.confirm('Hapus roda tersimpan "' + entry.name + '"?')) return;
-        saved = saved.filter(function (row) { return row.id !== entry.id; });
-        persistSaved();
-        renderSaved();
-      }));
+      if (!inCloud || canPush()) {
+        actions.appendChild(button('Hapus', 'btn btn--small btn--ghost', function () {
+          var where = inCloud ? ' dari database' : '';
+          if (!global.confirm('Hapus roda tersimpan "' + entry.name + '"' + where + '?')) return;
+
+          saved = saved.filter(function (item) { return item.id !== entry.id; });
+          persistSaved();
+
+          if (!inCloud) { renderSaved(); return; }
+
+          FWCloud.remove(entry.id).then(function (result) {
+            if (!result.ok) { toast(cloudMessage(result)); renderSaved(); return; }
+            cloudWheels = cloudWheels.filter(function (item) { return item.id !== entry.id; });
+            renderSaved();
+            toast('"' + entry.name + '" dihapus dari database.');
+          });
+        }));
+      }
 
       li.appendChild(head);
       li.appendChild(preview);
@@ -894,28 +1109,25 @@
 
     if (!source.items.length) { toast('Roda ini masih kosong.'); return; }
 
-    var existing = saved.filter(function (row) { return row.name.toLowerCase() === name.toLowerCase(); })[0];
+    var existing = findSavedByName(name);
     if (existing && !global.confirm('"' + name + '" sudah ada. Timpa?')) return;
 
-    if (existing) {
-      existing.names = source.items.map(function (item) { return item.label; });
-      existing.blocked = blockedListOf(source);
-      existing.updatedAt = Date.now();
-    } else {
-      saved.unshift({
-        id: uid(),
-        name: name,
-        names: source.items.map(function (item) { return item.label; }),
-        blocked: blockedListOf(source),
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      });
-    }
+    var wheel = existing
+      ? wheelFrom(source, existing.data.id, existing.data.name, existing.data.createdAt)
+      : wheelFrom(source, null, name, null);
 
-    persistSaved();
+    upsertLocal(wheel);
     renderSaved();
     saveName.value = '';
-    toast('Roda "' + name + '" tersimpan.');
+
+    var wasInCloud = existing && existing.source !== 'local';
+    if (canPush()) {
+      pushToCloud(wheel, 'Roda "' + name + '" tersimpan di database.');
+    } else {
+      toast(wasInCloud
+        ? 'Roda "' + name + '" tersimpan di browser ini (masuk sebagai admin untuk memperbarui database).'
+        : 'Roda "' + name + '" tersimpan di browser ini.');
+    }
   });
 
   saveSource.addEventListener('change', function () {
@@ -930,7 +1142,12 @@
   /* ---------- Ekspor / impor ---------- */
 
   $('#export-json').addEventListener('click', function () {
-    var payload = { app: 'fortunewheel', version: 1, exportedAt: new Date().toISOString(), wheels: saved };
+    var payload = {
+      app: 'fortunewheel',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      wheels: mergedSaved().map(function (row) { return row.data; })
+    };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
@@ -1036,6 +1253,7 @@
   buildPanel(1);
   applyMode();
   applySound();
+  refreshCloud();
 
   if (!FWStorage.isAvailable()) {
     $('#storage-note').textContent = 'Penyimpanan browser tidak aktif — data hanya bertahan selama tab ini terbuka.';

@@ -16,6 +16,7 @@ Situs statis murni — tanpa framework, tanpa dependency, tanpa proses build.
 | **Tampil tapi tidak diundi** | Untuk peserta yang sudah sering menang: namanya **tetap tampil di roda** (segmen abu-abu bergaris) tapi tidak akan pernah terpilih. Atur lewat tombol ⊘ di daftar nama atau tombol *Tidak ikut lagi* di kartu pemenang. Bisa dibatalkan satu per satu, atau sekaligus lewat **ikutkan semua lagi**. |
 | **Setelah menang** | Satu pilihan per roda: pemenang *tetap di roda*, *hapus dari roda*, atau *tidak ikut lagi* secara otomatis. |
 | **Roda tersimpan** | Simpan daftar nama dengan sebuah nama roda, lalu muat lagi kapan saja — status *tidak diundi* ikut tersimpan. Bisa ditimpa, diduplikat, dihapus, diekspor/impor JSON. |
+| **Database (opsional)** | Kalau Upstash Redis dipasang di Vercel, roda tersimpan naik ke database sehingga bisa dibuka dari perangkat lain dan tidak hilang saat data browser dibersihkan. Membaca terbuka; menyimpan/menghapus perlu **kode admin**. Tanpa database, aplikasi tetap jalan penuh dengan penyimpanan browser. |
 | **Dua roda** | Ganti ke mode *2 Roda* untuk menjalankan roda kedua dengan isi berbeda (mis. peserta × hadiah). Bisa diputar sendiri-sendiri atau bareng lewat **Putar semua**. Kartu hasil selalu menampilkan pemenang terakhir dari **kedua** roda — memutar roda 2 tidak menghapus pemenang roda 1 — dan yang baru saja diundi diberi tanda *baru saja*. |
 | **Layar peserta** | Halaman `slide.html` untuk diproyeksikan ke layar besar: daftar peserta berukuran besar, status *sedang mengundi*, pengumuman pemenang layar penuh dengan confetti, dan daftar pemenang sejauh ini. Mengikuti halaman roda secara langsung di browser yang sama. |
 | **Riwayat** | Daftar pemenang per roda beserta jamnya. |
@@ -36,6 +37,51 @@ Sinkronisasinya lewat `BroadcastChannel` + `localStorage`, jadi berlaku untuk
 tab/jendela lain **di browser yang sama** — cukup untuk laptop yang disambungkan
 ke proyektor. Untuk tampil di perangkat lain (mis. dari komputer berbeda),
 dibutuhkan penyimpanan bersama di server.
+
+## Database roda tersimpan (opsional)
+
+Tanpa disetel pun aplikasi jalan penuh — roda tersimpan di browser masing-masing.
+Setelah database dipasang, roda bisa dibuka dari perangkat mana saja.
+
+**1. Pasang Upstash Redis**
+
+Di dashboard Vercel: **Storage → Marketplace → Upstash (Redis) → Connect to
+Project**. Env `KV_REST_API_URL` dan `KV_REST_API_TOKEN` masuk otomatis (nama
+`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` juga dikenali).
+
+**2. Isi kode admin**
+
+**Settings → Environment Variables → Add**: `ADMIN_CODE`, isi dengan kata sandi
+acak yang panjang. Selama env ini kosong, API sengaja **hanya-baca** supaya
+database tidak pernah terbuka untuk umum karena lupa disetel.
+
+**3. Deploy ulang**, lalu buka **Roda tersimpan** di aplikasi dan masukkan kode
+admin sekali di perangkat itu.
+
+Siapa boleh apa:
+
+| | Membaca & memuat roda | Menyimpan, menimpa, menghapus |
+| --- | --- | --- |
+| Pengunjung biasa | ✅ | ❌ |
+| Sudah masukkan kode admin | ✅ | ✅ |
+
+Kode admin disimpan di `localStorage` browser yang memasukkannya, dan dikirim
+sebagai header `x-admin-code` pada setiap penulisan. Karena itu pakai kode yang
+panjang dan acak, jangan dipasang di komputer umum, dan ganti env-nya kalau
+bocor (semua perangkat otomatis diminta memasukkan kode lagi).
+
+Endpoint `api/wheels.js`:
+
+| Metode | Guna | Perlu kode |
+| --- | --- | --- |
+| `GET /api/wheels` | status database + daftar roda | tidak |
+| `POST /api/wheels` | memeriksa kode admin | — |
+| `PUT /api/wheels` | menyimpan/memperbarui satu roda | ya |
+| `DELETE /api/wheels?id=…` | menghapus satu roda | ya |
+
+Batas yang dijaga server: 200 roda, 300 nama per roda, 60 karakter per nama.
+Data disimpan sebagai satu hash Redis (`fortunewheel:wheels`), bisa diubah lewat
+env `FW_REDIS_KEY`.
 
 ## Menjalankan di komputer sendiri
 
@@ -74,8 +120,9 @@ npx vercel          # deploy pratinjau
 npx vercel --prod   # deploy ke domain produksi
 ```
 
-Karena semua data disimpan di `localStorage` masing-masing pengunjung, tidak ada
-database atau environment variable yang perlu disiapkan.
+Tanpa environment variable apa pun, situs langsung jalan dengan penyimpanan
+browser. Untuk menyimpan roda di database lintas perangkat, lihat bagian
+**Database roda tersimpan** di atas.
 
 ## Struktur berkas
 
@@ -88,6 +135,8 @@ js/sound.js       bunyi "tek" dan fanfare via Web Audio API
 js/confetti.js    animasi confetti di canvas layar penuh
 js/wheel.js       gambar roda + animasi putaran
 js/app.js         state aplikasi, dua panel roda, modal pemenang, roda tersimpan
+js/cloud.js       klien database (aman diabaikan kalau API tidak ada)
+api/wheels.js     Serverless Function: baca/tulis roda di Upstash Redis
 slide.html        layar peserta untuk diproyeksikan
 css/slide.css     tampilan layar peserta
 js/slide.js       isi layar peserta + pengumuman pemenang

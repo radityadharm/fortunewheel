@@ -137,6 +137,19 @@
         <button type="button" class="iconbtn" id="close-drawer" aria-label="Tutup">×</button>
       </header>
 
+      <section class="cloud" id="cloud-box">
+        <div class="cloud__head">
+          <span class="cloud__dot" id="cloud-dot" data-state="checking" aria-hidden="true"></span>
+          <strong id="cloud-status">Memeriksa database…</strong>
+          <button type="button" class="linkbtn" id="cloud-logout" hidden>keluar</button>
+        </div>
+        <p class="cloud__note" id="cloud-note"></p>
+        <form class="cloud__form" id="cloud-form" autocomplete="off" hidden>
+          <input type="password" id="admin-code" placeholder="Kode admin" autocomplete="current-password" />
+          <button type="submit" class="btn btn--small btn--primary">Masuk</button>
+        </form>
+      </section>
+
       <form class="saveform" id="save-form" autocomplete="off">
         <div class="saveform__row">
           <label class="field">
@@ -165,6 +178,7 @@
 
   <script src="js/storage.js"></script>
   <script src="js/sync.js"></script>
+  <script src="js/cloud.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/confetti.js"></script>
   <script src="js/wheel.js"></script>
